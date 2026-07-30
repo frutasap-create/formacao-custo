@@ -31,6 +31,10 @@
   button.btn.secundario{ background:#fff; color:var(--verde); border:1px solid var(--verde); }
   button.btn.perigo{ background:var(--alerta); }
   table{ width:100%; border-collapse:collapse; font-size:.85rem; }
+  .tbl{ width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .tbl table{ min-width:480px; }
+  html, body{ max-width:100%; overflow-x:hidden; }
+  input, select{ max-width:100%; }
   th, td{ text-align:left; padding:8px 6px; border-bottom:1px solid var(--borda); }
   th{ color:#777; font-weight:600; font-size:.75rem; text-transform:uppercase; }
   .pill{ display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; background:var(--ok-bg); color:var(--verde); }
@@ -284,7 +288,7 @@ function renderCustos(){
       <button class="btn" onclick="salvarTodosCustos()">💾 Salvar todos os custos</button>
       <span id="msgCustos" style="font-size:.85rem; font-weight:600; color:var(--verde); opacity:0; transition:opacity .3s;"></span>
     </div>
-    <table><thead><tr><th>Produto</th><th>Unidade</th><th>Custo unitário (R$)</th><th></th></tr></thead><tbody>`;
+    <div class="tbl"><table><thead><tr><th>Produto</th><th>Unidade</th><th>Custo unitário (R$)</th><th></th></tr></thead><tbody>`;
   produtos.forEach(p => {
     html += `<tr>
       <td>${p.nome}</td>
@@ -295,7 +299,7 @@ function renderCustos(){
       </td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -351,7 +355,7 @@ function renderVendaResultado(){
     return;
   }
 
-  let html = `<table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th></tr></thead><tbody>`;
+  let html = `<div class="tbl"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th></tr></thead><tbody>`;
 
   let totalFatBruto = 0, totalCusto = 0, totalDesconto = 0;
   const linhasCliente = []; // dados para as tabelas de envio ao cliente
@@ -379,7 +383,7 @@ function renderVendaResultado(){
       <td>${fmt(custoTotal)}</td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   // Frete e comissão: aplicados UMA vez sobre o total da venda
   const freteRS = cliente.tem_frete ? Number(cliente.valor_frete||0) : 0;
@@ -416,9 +420,9 @@ function renderVendaResultado(){
         <h2 style="margin:0;">Tabela de Preços (para o cliente)</h2>
         <button class="btn secundario" style="padding:6px 12px; font-size:.8rem" onclick="copiarTabela('precos')">📋 Copiar p/ WhatsApp</button>
       </div>
-      <table><thead><tr><th>Produto</th><th>Unidade</th><th>Preço unitário</th></tr></thead><tbody>
+      <div class="tbl"><table><thead><tr><th>Produto</th><th>Unidade</th><th>Preço unitário</th></tr></thead><tbody>
         ${linhasCliente.map(l => `<tr><td>${l.nome}</td><td>${l.unidade}</td><td>${fmt(l.preco)}</td></tr>`).join('')}
-      </tbody></table>
+      </tbody></table></div>
     </div>
   `;
 
@@ -432,10 +436,10 @@ function renderVendaResultado(){
           <button class="btn" style="padding:6px 12px; font-size:.8rem" onclick="gerarImagem()">🖼️ Gerar imagem</button>
         </div>
       </div>
-      <table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço unit.</th><th>Total</th></tr></thead><tbody>
+      <div class="tbl"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço unit.</th><th>Total</th></tr></thead><tbody>
         ${linhasCliente.map(l => `<tr><td>${l.nome}</td><td>${l.qtd}</td><td>${fmt(l.preco)}</td><td>${fmt(l.total)}</td></tr>`).join('')}
         <tr style="font-weight:700; border-top:2px solid var(--texto);"><td colspan="3">TOTAL</td><td>${fmt(totalFatBruto)}</td></tr>
-      </tbody></table>
+      </tbody></table></div>
     </div>
   `;
 
