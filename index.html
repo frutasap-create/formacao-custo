@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Formação de Preço de Venda - AP Frutas</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
     --verde:#2f5233; --verde-claro:#4a7c50; --creme:#faf7f0; --texto:#2b2b26;
@@ -353,6 +354,7 @@ function renderVendaResultado(){
   let html = `<table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th></tr></thead><tbody>`;
 
   let totalFatBruto = 0, totalCusto = 0, totalDesconto = 0;
+  const linhasCliente = []; // dados para as tabelas de envio ao cliente
 
   itens.forEach(v => {
     const p = produtos.find(x => x.id === v.produto_id);
@@ -367,9 +369,11 @@ function renderVendaResultado(){
     totalCusto += custoTotal;
     totalDesconto += descontoRS;
 
+    linhasCliente.push({nome: p.nome, unidade: p.unidade, qtd, preco, total: fatBruto});
+
     html += `<tr>
       <td>${p.nome}</td>
-      <td><input type="number" step="1" style="width:60px" value="${qtd}" data-v="${v.id}" data-campo="quantidade" onchange="atualizarVenda(this)"></td>
+      <td><input type="number" step="1" style="width:90px" value="${qtd}" data-v="${v.id}" data-campo="quantidade" onchange="atualizarVenda(this)"></td>
       <td><input type="number" step="0.01" style="width:90px" value="${preco}" data-v="${v.id}" data-campo="preco_venda" onchange="atualizarVenda(this)"></td>
       <td>${fmt(fatBruto)}</td>
       <td>${fmt(custoTotal)}</td>
@@ -404,7 +408,154 @@ function renderVendaResultado(){
     </div>
   `;
 
+  // ===== TABELAS PARA ENVIAR AO CLIENTE (só preço de venda, nunca custo) =====
+  // Tabela 1: Lista de preços (produto + preço unitário)
+  html += `
+    <div class="card" style="margin-top:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <h2 style="margin:0;">Tabela de Preços (para o cliente)</h2>
+        <button class="btn secundario" style="padding:6px 12px; font-size:.8rem" onclick="copiarTabela('precos')">📋 Copiar p/ WhatsApp</button>
+      </div>
+      <table><thead><tr><th>Produto</th><th>Unidade</th><th>Preço unitário</th></tr></thead><tbody>
+        ${linhasCliente.map(l => `<tr><td>${l.nome}</td><td>${l.unidade}</td><td>${fmt(l.preco)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>
+  `;
+
+  // Tabela 2: Pedido (produto + quantidade + preço unit + total)
+  html += `
+    <div class="card" style="margin-top:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <h2 style="margin:0;">Pedido (para o cliente)</h2>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn secundario" style="padding:6px 12px; font-size:.8rem" onclick="copiarTabela('pedido')">📋 Copiar p/ WhatsApp</button>
+          <button class="btn" style="padding:6px 12px; font-size:.8rem" onclick="gerarImagem()">🖼️ Gerar imagem</button>
+        </div>
+      </div>
+      <table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço unit.</th><th>Total</th></tr></thead><tbody>
+        ${linhasCliente.map(l => `<tr><td>${l.nome}</td><td>${l.qtd}</td><td>${fmt(l.preco)}</td><td>${fmt(l.total)}</td></tr>`).join('')}
+        <tr style="font-weight:700; border-top:2px solid var(--texto);"><td colspan="3">TOTAL</td><td>${fmt(totalFatBruto)}</td></tr>
+      </tbody></table>
+    </div>
+  `;
+
+  // guarda os dados para os botões de copiar
+  window._dadosCliente = { nome: cliente.nome, linhas: linhasCliente, total: totalFatBruto };
+
   el.innerHTML = html;
+}
+
+function copiarTabela(tipo){
+  const d = window._dadosCliente;
+  if(!d){ alert('Selecione um cliente com produtos primeiro.'); return; }
+  let texto = '';
+  if(tipo === 'precos'){
+    texto = `*Tabela de Preços — AP Frutas*\n_Cliente: ${d.nome}_\n\n`;
+    d.linhas.forEach(l => {
+      texto += `• ${l.nome} (${l.unidade}): ${fmt(l.preco)}\n`;
+    });
+  } else {
+    texto = `*Pedido — AP Frutas*\n_Cliente: ${d.nome}_\n\n`;
+    d.linhas.forEach(l => {
+      texto += `• ${l.nome}: ${l.qtd} x ${fmt(l.preco)} = ${fmt(l.total)}\n`;
+    });
+    texto += `\n*TOTAL: ${fmt(d.total)}*`;
+  }
+  // copia pra área de transferência
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(() => {
+      alert('Copiado! Agora é só colar no WhatsApp.');
+    }).catch(() => {
+      copiarFallback(texto);
+    });
+  } else {
+    copiarFallback(texto);
+  }
+}
+
+function copiarFallback(texto){
+  // método antigo para navegadores/contextos que bloqueiam clipboard
+  const ta = document.createElement('textarea');
+  ta.value = texto;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    alert('Copiado! Agora é só colar no WhatsApp.');
+  } catch(e) {
+    alert('Não consegui copiar automaticamente. Segue o texto para copiar manualmente:\n\n' + texto);
+  }
+  document.body.removeChild(ta);
+}
+
+function gerarImagem(){
+  const d = window._dadosCliente;
+  if(!d || !d.linhas || d.linhas.length === 0){ alert('Selecione um cliente com produtos primeiro.'); return; }
+  if(typeof html2canvas === 'undefined'){ alert('A ferramenta de imagem ainda está carregando. Aguarde alguns segundos e tente de novo.'); return; }
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  // monta o cartão visual (só preço de venda, nunca custo)
+  const linhasHtml = d.linhas.map(l => `
+    <tr>
+      <td style="padding:10px 12px; border-bottom:1px solid #e5e0d0;">${l.nome}</td>
+      <td style="padding:10px 12px; border-bottom:1px solid #e5e0d0; text-align:center;">${l.qtd}</td>
+      <td style="padding:10px 12px; border-bottom:1px solid #e5e0d0; text-align:right;">${fmt(l.preco)}</td>
+      <td style="padding:10px 12px; border-bottom:1px solid #e5e0d0; text-align:right; font-weight:600;">${fmt(l.total)}</td>
+    </tr>`).join('');
+
+  const cartao = document.createElement('div');
+  cartao.style.cssText = 'position:fixed; left:-9999px; top:0; width:600px; background:#ffffff; font-family:Arial, sans-serif; color:#2b2b26;';
+  cartao.innerHTML = `
+    <div style="background:#2f5233; color:#fff; padding:22px 26px;">
+      <div style="font-size:22px; font-weight:700;">AP Frutas</div>
+      <div style="font-size:14px; opacity:.9; margin-top:2px;">Orçamento / Pedido</div>
+    </div>
+    <div style="padding:20px 26px;">
+      <div style="display:flex; justify-content:space-between; font-size:14px; color:#555; margin-bottom:16px;">
+        <span><strong>Cliente:</strong> ${d.nome}</span>
+        <span><strong>Data:</strong> ${hoje}</span>
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:14px;">
+        <thead>
+          <tr style="background:#eaf3e8;">
+            <th style="padding:10px 12px; text-align:left; color:#2f5233;">Produto</th>
+            <th style="padding:10px 12px; text-align:center; color:#2f5233;">Qtd</th>
+            <th style="padding:10px 12px; text-align:right; color:#2f5233;">Preço unit.</th>
+            <th style="padding:10px 12px; text-align:right; color:#2f5233;">Total</th>
+          </tr>
+        </thead>
+        <tbody>${linhasHtml}</tbody>
+      </table>
+      <div style="margin-top:18px; background:#2f5233; color:#fff; padding:14px 20px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:15px;">TOTAL DO PEDIDO</span>
+        <span style="font-size:22px; font-weight:700;">${fmt(d.total)}</span>
+      </div>
+    </div>
+    <div style="padding:12px 26px; font-size:11px; color:#999; text-align:center; border-top:1px solid #eee;">
+      Orçamento gerado em ${hoje} · Valores sujeitos a confirmação
+    </div>
+  `;
+  document.body.appendChild(cartao);
+
+  html2canvas(cartao, {scale: 2, backgroundColor: '#ffffff'}).then(canvas => {
+    document.body.removeChild(cartao);
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orcamento-${d.nome.replace(/[^a-z0-9]/gi,'-').toLowerCase()}-${hoje.replace(/\//g,'-')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }, 'image/png');
+  }).catch(err => {
+    if(cartao.parentNode) document.body.removeChild(cartao);
+    alert('Não consegui gerar a imagem. Tente de novo, ou use o botão de copiar texto.');
+  });
 }
 
 async function atualizarVenda(input){
