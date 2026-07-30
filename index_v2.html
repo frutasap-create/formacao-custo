@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formação de Preço de Venda - AP Frutas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --verde:#2f5233; --verde-claro:#4a7c50; --creme:#faf7f0; --texto:#2b2b26;
+    --borda:#ddd6c6; --alerta:#b23b2e; --alerta-bg:#fbe9e7; --ok-bg:#eaf3e8;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--creme); color:var(--texto); }
+  header{ background:var(--verde); color:#fff; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  header h1{ font-size:1.15rem; margin:0; font-weight:600; }
+  header .status{ font-size:.75rem; opacity:.85; }
+  nav{ display:flex; gap:4px; background:#fff; border-bottom:1px solid var(--borda); padding:0 12px; overflow-x:auto; }
+  nav button{ background:none; border:none; padding:14px 16px; font-size:.9rem; cursor:pointer; color:#666; border-bottom:3px solid transparent; white-space:nowrap; }
+  nav button.active{ color:var(--verde); border-bottom-color:var(--verde); font-weight:600; }
+  main{ max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
+  .card{ background:#fff; border:1px solid var(--borda); border-radius:10px; padding:18px; margin-bottom:16px; }
+  .card h2{ font-size:1rem; margin:0 0 12px; color:var(--verde); }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+  label{ font-size:.75rem; color:#777; display:block; margin-bottom:3px; }
+  input, select{ width:100%; padding:8px 10px; border:1px solid var(--borda); border-radius:6px; font-size:.9rem; background:#fff; }
+  input[type=checkbox]{ width:auto; }
+  button.btn{ background:var(--verde); color:#fff; border:none; padding:9px 18px; border-radius:6px; font-size:.85rem; cursor:pointer; font-weight:600; }
+  button.btn:hover{ background:var(--verde-claro); }
+  button.btn.secundario{ background:#fff; color:var(--verde); border:1px solid var(--verde); }
+  button.btn.perigo{ background:var(--alerta); }
+  table{ width:100%; border-collapse:collapse; font-size:.85rem; }
+  th, td{ text-align:left; padding:8px 6px; border-bottom:1px solid var(--borda); }
+  th{ color:#777; font-weight:600; font-size:.75rem; text-transform:uppercase; }
+  .pill{ display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; background:var(--ok-bg); color:var(--verde); }
+  .breakdown-row{ display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--borda); font-size:.9rem; }
+  .breakdown-row.total{ font-weight:700; border-bottom:none; border-top:2px solid var(--texto); margin-top:4px; padding-top:10px; }
+  .resultado-box{ margin-top:14px; padding:14px; border-radius:8px; }
+  .resultado-box.ok{ background:var(--ok-bg); }
+  .resultado-box.alerta{ background:var(--alerta-bg); border:1px solid var(--alerta); }
+  .resultado-box .valor{ font-size:1.5rem; font-weight:700; color:var(--verde); }
+  .resultado-box.alerta .valor{ color:var(--alerta); }
+  .aviso{ font-size:.82rem; color:var(--alerta); margin-top:8px; font-weight:600; }
+  .empty{ text-align:center; color:#999; padding:30px 10px; font-size:.85rem; }
+  .config-warn{ background:var(--alerta-bg); border:1px solid var(--alerta); border-radius:8px; padding:14px; font-size:.85rem; margin-bottom:16px; }
+  form.inline{ display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin-bottom:14px; }
+  form.inline > div{ flex:1; min-width:120px; }
+  .checklist{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+  .checklist label{ display:flex; align-items:center; gap:6px; font-size:.85rem; color:var(--texto); background:#fbfaf6; border:1px solid var(--borda); padding:6px 10px; border-radius:6px; }
+  .checklist input{ width:auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍓 Formação de Preço de Venda — AP Frutas</h1>
+  <span class="status" id="status">conectando...</span>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="clientes">Clientes</button>
+  <button class="tab-btn" data-tab="custos">Custos</button>
+  <button class="tab-btn" data-tab="venda">Preço de Venda</button>
+</nav>
+
+<main>
+  <div id="configWarn" class="config-warn" style="display:none">
+    ⚠️ Configure sua URL e chave do Supabase no início do arquivo (const SUPABASE_URL / SUPABASE_ANON_KEY) antes de usar.
+  </div>
+
+  <!-- TAB CLIENTES -->
+  <section id="tab-clientes">
+    <div class="card">
+      <h2>Novo cliente</h2>
+      <form class="inline" id="formCliente">
+        <div><label>Nome do cliente</label><input type="text" id="clienteNome" required></div>
+        <div><button type="submit" class="btn">Adicionar</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Clientes cadastrados</h2>
+      <div id="listaClientes"><div class="empty">Carregando...</div></div>
+    </div>
+  </section>
+
+  <!-- TAB CUSTOS -->
+  <section id="tab-custos" style="display:none">
+    <div class="card">
+      <h2>Novo produto</h2>
+      <form class="inline" id="formProduto">
+        <div><label>Nome do produto</label><input type="text" id="prodNome" required></div>
+        <div>
+          <label>Unidade</label>
+          <select id="prodUnidade"><option value="caixa">Caixa</option><option value="kg">Kg</option></select>
+        </div>
+        <div><button type="submit" class="btn">Adicionar</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Custo unitário por produto</h2>
+      <div id="listaCustos"><div class="empty">Carregando...</div></div>
+    </div>
+  </section>
+
+  <!-- TAB VENDA -->
+  <section id="tab-venda" style="display:none">
+    <div class="card">
+      <h2>Simular venda por cliente</h2>
+      <div class="grid">
+        <div><label>Cliente</label><select id="vendaCliente"></select></div>
+      </div>
+      <div id="vendaResultado"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const SUPABASE_URL ='https://nmxmgogbkgogsjuxgene.supabase.co';;
+const SUPABASE_ANON_KEY ='sb_publishable_2UUIo-7evGEzFzgGVud1Jg_GcClcHu3';
+
+let supabaseClient = null;
+let produtos = [];
+let clientes = [];
+let vendas = []; // vendas_cliente_produto
+
+function init(){
+  if(SUPABASE_URL.includes('COLE_AQUI') || SUPABASE_ANON_KEY.includes('COLE_AQUI')){
+    document.getElementById('configWarn').style.display = 'block';
+    document.getElementById('status').textContent = 'não configurado';
+    return;
+  }
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  document.getElementById('status').textContent = 'conectado';
+  carregarTudo();
+}
+
+async function carregarTudo(){
+  const {data: prods} = await supabaseClient.from('produtos').select('*').order('nome');
+  produtos = prods || [];
+  const {data: clis} = await supabaseClient.from('clientes').select('*').order('nome');
+  clientes = clis || [];
+  const {data: vds} = await supabaseClient.from('vendas_cliente_produto').select('*');
+  vendas = vds || [];
+  renderClientes();
+  renderCustos();
+  renderVendaSelect();
+}
+
+function fmt(n){ return 'R$ ' + Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ================= CLIENTES =================
+document.getElementById('formCliente').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nome = document.getElementById('clienteNome').value.trim();
+  if(!nome) return;
+  await supabaseClient.from('clientes').insert({nome});
+  document.getElementById('clienteNome').value = '';
+  await carregarTudo();
+});
+
+function renderClientes(){
+  const el = document.getElementById('listaClientes');
+  if(clientes.length === 0){ el.innerHTML = '<div class="empty">Nenhum cliente cadastrado ainda.</div>'; return; }
+  let html = '';
+  clientes.forEach(cl => {
+    const produtosDoCliente = vendas.filter(v => v.cliente_id === cl.id).map(v => v.produto_id);
+    html += `
+    <div class="card" style="margin-bottom:12px; background:#fbfaf6">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <strong>${cl.nome}</strong>
+        <button class="btn perigo" style="padding:4px 10px; font-size:.75rem" onclick="excluirCliente('${cl.id}')">Excluir</button>
+      </div>
+      <div class="grid">
+        <div>
+          <label>Tem frete?</label>
+          <select data-cliente="${cl.id}" data-campo="tem_frete" onchange="atualizarClienteCampo(this)">
+            <option value="false" ${!cl.tem_frete?'selected':''}>Não</option>
+            <option value="true" ${cl.tem_frete?'selected':''}>Sim</option>
+          </select>
+        </div>
+        <div><label>Valor do frete (R$)</label><input type="number" step="0.01" value="${cl.valor_frete||0}" data-cliente="${cl.id}" data-campo="valor_frete" onchange="atualizarClienteCampo(this)"></div>
+        <div><label>Desconto financeiro (%)</label><input type="number" step="0.1" value="${cl.desconto_financeiro_pct||0}" data-cliente="${cl.id}" data-campo="desconto_financeiro_pct" onchange="atualizarClienteCampo(this)"></div>
+        <div><label>Prazo pagamento (dias)</label><input type="number" value="${cl.prazo_pagamento_dias||0}" data-cliente="${cl.id}" data-campo="prazo_pagamento_dias" onchange="atualizarClienteCampo(this)"></div>
+        <div><label>Margem mínima (%)</label><input type="number" step="0.1" value="${cl.margem_minima_pct||15}" data-cliente="${cl.id}" data-campo="margem_minima_pct" onchange="atualizarClienteCampo(this)"></div>
+      </div>
+      <div style="margin-top:12px;">
+        <label>Produtos que este cliente compra</label>
+        <div class="checklist">
+          ${produtos.map(p => `
+            <label>
+              <input type="checkbox" data-cliente="${cl.id}" data-produto="${p.id}"
+                ${produtosDoCliente.includes(p.id) ? 'checked' : ''}
+                onchange="toggleProdutoCliente(this)">
+              ${p.nome}
+            </label>`).join('') || '<span style="color:#999; font-size:.8rem">Cadastre produtos na aba Custos primeiro.</span>'}
+        </div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+async function atualizarClienteCampo(input){
+  const clienteId = input.dataset.cliente;
+  const campo = input.dataset.campo;
+  let valor = input.value;
+  if(campo === 'tem_frete') valor = (valor === 'true');
+  else valor = parseFloat(valor) || 0;
+  await supabaseClient.from('clientes').update({[campo]: valor}).eq('id', clienteId);
+  await carregarTudo();
+}
+
+async function toggleProdutoCliente(checkbox){
+  const clienteId = checkbox.dataset.cliente;
+  const produtoId = checkbox.dataset.produto;
+  if(checkbox.checked){
+    await supabaseClient.from('vendas_cliente_produto').upsert(
+      {cliente_id: clienteId, produto_id: produtoId, quantidade: 1, preco_venda: 0},
+      {onConflict: 'cliente_id,produto_id'}
+    );
+  } else {
+    await supabaseClient.from('vendas_cliente_produto').delete()
+      .eq('cliente_id', clienteId).eq('produto_id', produtoId);
+  }
+  await carregarTudo();
+}
+
+async function excluirCliente(id){
+  if(!confirm('Excluir este cliente e seus vínculos de produto?')) return;
+  await supabaseClient.from('clientes').delete().eq('id', id);
+  await carregarTudo();
+}
+
+// ================= CUSTOS =================
+document.getElementById('formProduto').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nome = document.getElementById('prodNome').value.trim();
+  const unidade = document.getElementById('prodUnidade').value;
+  if(!nome) return;
+  await supabaseClient.from('produtos').insert({nome, unidade, custo_unitario: 0});
+  document.getElementById('prodNome').value = '';
+  await carregarTudo();
+});
+
+function renderCustos(){
+  const el = document.getElementById('listaCustos');
+  if(produtos.length === 0){ el.innerHTML = '<div class="empty">Nenhum produto cadastrado ainda.</div>'; return; }
+  let html = '<table><thead><tr><th>Produto</th><th>Unidade</th><th>Custo unitário (R$)</th><th></th></tr></thead><tbody>';
+  produtos.forEach(p => {
+    html += `<tr>
+      <td>${p.nome}</td>
+      <td><span class="pill">${p.unidade}</span></td>
+      <td><input type="number" step="0.01" style="width:110px" value="${p.custo_unitario||0}" id="custo_${p.id}"></td>
+      <td style="text-align:right">
+        <button class="btn secundario" style="padding:5px 10px; font-size:.78rem" onclick="salvarCusto('${p.id}')">Salvar</button>
+        <button class="btn perigo" style="padding:5px 10px; font-size:.78rem" onclick="excluirProduto('${p.id}')">Excluir</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function salvarCusto(produtoId){
+  const valor = parseFloat(document.getElementById('custo_'+produtoId).value) || 0;
+  await supabaseClient.from('produtos').update({custo_unitario: valor}).eq('id', produtoId);
+  await carregarTudo();
+}
+
+async function excluirProduto(id){
+  if(!confirm('Excluir este produto?')) return;
+  await supabaseClient.from('produtos').delete().eq('id', id);
+  await carregarTudo();
+}
+
+// ================= PREÇO DE VENDA =================
+function renderVendaSelect(){
+  const sel = document.getElementById('vendaCliente');
+  const atual = sel.value;
+  sel.innerHTML = clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  if(atual) sel.value = atual;
+  renderVendaResultado();
+}
+document.getElementById('vendaCliente').addEventListener('change', renderVendaResultado);
+
+function renderVendaResultado(){
+  const el = document.getElementById('vendaResultado');
+  const clienteId = document.getElementById('vendaCliente').value;
+  if(!clienteId){ el.innerHTML = '<div class="empty">Cadastre um cliente primeiro.</div>'; return; }
+  const cliente = clientes.find(c => c.id === clienteId);
+  const itens = vendas.filter(v => v.cliente_id === clienteId);
+  if(itens.length === 0){
+    el.innerHTML = '<div class="empty">Este cliente ainda não tem produtos vinculados. Vá na aba Clientes e marque os produtos que ele compra.</div>';
+    return;
+  }
+
+  let html = `<table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead><tbody>`;
+
+  let totalFatBruto = 0, totalCusto = 0, totalLucro = 0;
+
+  itens.forEach(v => {
+    const p = produtos.find(x => x.id === v.produto_id);
+    if(!p) return;
+    const qtd = Number(v.quantidade) || 0;
+    const preco = Number(v.preco_venda) || 0;
+    const fatBruto = qtd * preco;
+    const descontoRS = fatBruto * ((cliente.desconto_financeiro_pct||0)/100);
+    const freteRS = cliente.tem_frete ? Number(cliente.valor_frete||0) : 0;
+    const fatLiquido = fatBruto - descontoRS - freteRS;
+    const custoTotal = qtd * Number(p.custo_unitario||0);
+    const lucro = fatLiquido - custoTotal;
+    const margem = fatBruto > 0 ? (lucro / fatBruto * 100) : 0;
+
+    totalFatBruto += fatBruto;
+    totalCusto += custoTotal;
+    totalLucro += lucro;
+
+    html += `<tr>
+      <td>${p.nome}</td>
+      <td><input type="number" step="1" style="width:60px" value="${qtd}" data-v="${v.id}" data-campo="quantidade" onchange="atualizarVenda(this)"></td>
+      <td><input type="number" step="0.01" style="width:90px" value="${preco}" data-v="${v.id}" data-campo="preco_venda" onchange="atualizarVenda(this)"></td>
+      <td>${fmt(fatBruto)}</td>
+      <td>${fmt(custoTotal)}</td>
+      <td>${fmt(lucro)}</td>
+      <td style="color:${margem < (cliente.margem_minima_pct||0) ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${margem.toFixed(1)}%</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+
+  const margemGeral = totalFatBruto > 0 ? (totalLucro/totalFatBruto*100) : 0;
+  const abaixoDoMinimo = margemGeral < (cliente.margem_minima_pct || 0);
+
+  html += `
+    <div class="resultado-box ${abaixoDoMinimo ? 'alerta' : 'ok'}">
+      <div class="breakdown-row"><span>Faturamento Bruto (total)</span><span>${fmt(totalFatBruto)}</span></div>
+      <div class="breakdown-row"><span>Custo Total (total)</span><span>${fmt(totalCusto)}</span></div>
+      <div class="breakdown-row total"><span>Lucro Total</span><span class="valor">${fmt(totalLucro)}</span></div>
+      <div style="margin-top:8px;">Margem geral: <strong>${margemGeral.toFixed(1)}%</strong> — mínima cadastrada: ${cliente.margem_minima_pct||0}%</div>
+      ${abaixoDoMinimo ? '<div class="aviso">⚠️ Margem abaixo do mínimo cadastrado para este cliente.</div>' : ''}
+      <div style="margin-top:6px; font-size:.8rem; color:#666;">
+        Frete: ${cliente.tem_frete ? fmt(cliente.valor_frete) + ' (aplicado)' : 'não se aplica'} ·
+        Desconto financeiro: ${cliente.desconto_financeiro_pct||0}% ·
+        Prazo pagamento: ${cliente.prazo_pagamento_dias||0} dias
+      </div>
+    </div>
+  `;
+
+  el.innerHTML = html;
+}
+
+async function atualizarVenda(input){
+  const id = input.dataset.v;
+  const campo = input.dataset.campo;
+  const valor = parseFloat(input.value) || 0;
+  await supabaseClient.from('vendas_cliente_produto').update({[campo]: valor}).eq('id', id);
+  const v = vendas.find(x => x.id === id);
+  if(v) v[campo] = valor;
+  renderVendaResultado();
+}
+
+// ================= TABS =================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
+    document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+    if(btn.dataset.tab === 'venda') renderVendaResultado();
+  });
+});
+
+init();
+</script>
+</body>
+</html>
