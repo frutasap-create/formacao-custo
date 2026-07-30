@@ -91,7 +91,19 @@
         <div><label>Nome do produto</label><input type="text" id="prodNome" required></div>
         <div>
           <label>Unidade</label>
-          <select id="prodUnidade"><option value="caixa">Caixa</option><option value="kg">Kg</option></select>
+          <select id="prodUnidade" onchange="toggleUnidadeOutro()">
+            <option value="caixa">Caixa</option>
+            <option value="kg">Kg</option>
+            <option value="duzia">Dúzia</option>
+            <option value="bandeja">Bandeja</option>
+            <option value="pallet">Pallet</option>
+            <option value="unidade">Unidade</option>
+            <option value="__outro__">Outro (digitar)</option>
+          </select>
+        </div>
+        <div id="divUnidadeOutro" style="display:none">
+          <label>Qual unidade?</label>
+          <input type="text" id="prodUnidadeOutro" placeholder="Ex: saco, engradado...">
         </div>
         <div><button type="submit" class="btn">Adicionar</button></div>
       </form>
@@ -115,8 +127,9 @@
 </main>
 
 <script>
-const SUPABASE_URL ='https://nmxmgogbkgogsjuxgene.supabase.co';;
+const SUPABASE_URL = 'https://nmxmgogbkgogsjuxgene.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_2UUIo-7evGEzFzgGVudlJg_GcClcHu3';
+
 let supabaseClient = null;
 let produtos = [];
 let clientes = [];
@@ -181,6 +194,14 @@ function renderClientes(){
         <div><label>Desconto financeiro (%)</label><input type="number" step="0.1" value="${cl.desconto_financeiro_pct||0}" data-cliente="${cl.id}" data-campo="desconto_financeiro_pct" onchange="atualizarClienteCampo(this)"></div>
         <div><label>Prazo pagamento (dias)</label><input type="number" value="${cl.prazo_pagamento_dias||0}" data-cliente="${cl.id}" data-campo="prazo_pagamento_dias" onchange="atualizarClienteCampo(this)"></div>
         <div><label>Margem mínima (%)</label><input type="number" step="0.1" value="${cl.margem_minima_pct||15}" data-cliente="${cl.id}" data-campo="margem_minima_pct" onchange="atualizarClienteCampo(this)"></div>
+        <div>
+          <label>Tipo de comissão</label>
+          <select data-cliente="${cl.id}" data-campo="comissao_tipo" onchange="atualizarClienteCampo(this)">
+            <option value="percentual" ${(cl.comissao_tipo||'percentual')==='percentual'?'selected':''}>Percentual (%)</option>
+            <option value="fixo" ${cl.comissao_tipo==='fixo'?'selected':''}>Valor fixo (R$)</option>
+          </select>
+        </div>
+        <div><label>Comissão (${(cl.comissao_tipo||'percentual')==='fixo'?'R$':'%'})</label><input type="number" step="0.01" value="${cl.comissao_valor||0}" data-cliente="${cl.id}" data-campo="comissao_valor" onchange="atualizarClienteCampo(this)"></div>
       </div>
       <div style="margin-top:12px;">
         <label>Produtos que este cliente compra</label>
@@ -204,6 +225,7 @@ async function atualizarClienteCampo(input){
   const campo = input.dataset.campo;
   let valor = input.value;
   if(campo === 'tem_frete') valor = (valor === 'true');
+  else if(campo === 'comissao_tipo') valor = input.value; // texto, mantém como está
   else valor = parseFloat(valor) || 0;
   await supabaseClient.from('clientes').update({[campo]: valor}).eq('id', clienteId);
   await carregarTudo();
@@ -231,13 +253,25 @@ async function excluirCliente(id){
 }
 
 // ================= CUSTOS =================
+function toggleUnidadeOutro(){
+  const sel = document.getElementById('prodUnidade').value;
+  document.getElementById('divUnidadeOutro').style.display = (sel === '__outro__') ? 'block' : 'none';
+}
+
 document.getElementById('formProduto').addEventListener('submit', async (e) => {
   e.preventDefault();
   const nome = document.getElementById('prodNome').value.trim();
-  const unidade = document.getElementById('prodUnidade').value;
+  let unidade = document.getElementById('prodUnidade').value;
+  if(unidade === '__outro__'){
+    unidade = document.getElementById('prodUnidadeOutro').value.trim().toLowerCase();
+    if(!unidade){ alert('Digite qual é a unidade.'); return; }
+  }
   if(!nome) return;
   await supabaseClient.from('produtos').insert({nome, unidade, custo_unitario: 0});
   document.getElementById('prodNome').value = '';
+  document.getElementById('prodUnidadeOutro').value = '';
+  document.getElementById('prodUnidade').value = 'caixa';
+  toggleUnidadeOutro();
   await carregarTudo();
 });
 
@@ -293,9 +327,9 @@ function renderVendaResultado(){
     return;
   }
 
-  let html = `<table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th></tr></thead><tbody>`;
 
-  let totalFatBruto = 0, totalCusto = 0, totalLucro = 0;
+  let totalFatBruto = 0, totalCusto = 0, totalDesconto = 0;
 
   itens.forEach(v => {
     const p = produtos.find(x => x.id === v.produto_id);
@@ -304,15 +338,11 @@ function renderVendaResultado(){
     const preco = Number(v.preco_venda) || 0;
     const fatBruto = qtd * preco;
     const descontoRS = fatBruto * ((cliente.desconto_financeiro_pct||0)/100);
-    const freteRS = cliente.tem_frete ? Number(cliente.valor_frete||0) : 0;
-    const fatLiquido = fatBruto - descontoRS - freteRS;
     const custoTotal = qtd * Number(p.custo_unitario||0);
-    const lucro = fatLiquido - custoTotal;
-    const margem = fatBruto > 0 ? (lucro / fatBruto * 100) : 0;
 
     totalFatBruto += fatBruto;
     totalCusto += custoTotal;
-    totalLucro += lucro;
+    totalDesconto += descontoRS;
 
     html += `<tr>
       <td>${p.nome}</td>
@@ -320,25 +350,32 @@ function renderVendaResultado(){
       <td><input type="number" step="0.01" style="width:90px" value="${preco}" data-v="${v.id}" data-campo="preco_venda" onchange="atualizarVenda(this)"></td>
       <td>${fmt(fatBruto)}</td>
       <td>${fmt(custoTotal)}</td>
-      <td>${fmt(lucro)}</td>
-      <td style="color:${margem < (cliente.margem_minima_pct||0) ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${margem.toFixed(1)}%</td>
     </tr>`;
   });
   html += '</tbody></table>';
 
+  // Frete e comissão: aplicados UMA vez sobre o total da venda
+  const freteRS = cliente.tem_frete ? Number(cliente.valor_frete||0) : 0;
+  const comissaoTipo = cliente.comissao_tipo || 'percentual';
+  const comissaoRS = comissaoTipo === 'fixo'
+    ? Number(cliente.comissao_valor||0)
+    : totalFatBruto * (Number(cliente.comissao_valor||0)/100);
+
+  const totalLucro = totalFatBruto - totalDesconto - freteRS - comissaoRS - totalCusto;
   const margemGeral = totalFatBruto > 0 ? (totalLucro/totalFatBruto*100) : 0;
   const abaixoDoMinimo = margemGeral < (cliente.margem_minima_pct || 0);
 
   html += `
     <div class="resultado-box ${abaixoDoMinimo ? 'alerta' : 'ok'}">
-      <div class="breakdown-row"><span>Faturamento Bruto (total)</span><span>${fmt(totalFatBruto)}</span></div>
-      <div class="breakdown-row"><span>Custo Total (total)</span><span>${fmt(totalCusto)}</span></div>
+      <div class="breakdown-row"><span>Faturamento Bruto</span><span>${fmt(totalFatBruto)}</span></div>
+      <div class="breakdown-row"><span>(−) Desconto financeiro (${cliente.desconto_financeiro_pct||0}%)</span><span>${fmt(totalDesconto)}</span></div>
+      <div class="breakdown-row"><span>(−) Frete</span><span>${fmt(freteRS)}</span></div>
+      <div class="breakdown-row"><span>(−) Comissão (${comissaoTipo === 'fixo' ? 'R$ fixo' : (cliente.comissao_valor||0)+'%'})</span><span>${fmt(comissaoRS)}</span></div>
+      <div class="breakdown-row"><span>(−) Custo Total</span><span>${fmt(totalCusto)}</span></div>
       <div class="breakdown-row total"><span>Lucro Total</span><span class="valor">${fmt(totalLucro)}</span></div>
       <div style="margin-top:8px;">Margem geral: <strong>${margemGeral.toFixed(1)}%</strong> — mínima cadastrada: ${cliente.margem_minima_pct||0}%</div>
       ${abaixoDoMinimo ? '<div class="aviso">⚠️ Margem abaixo do mínimo cadastrado para este cliente.</div>' : ''}
       <div style="margin-top:6px; font-size:.8rem; color:#666;">
-        Frete: ${cliente.tem_frete ? fmt(cliente.valor_frete) + ' (aplicado)' : 'não se aplica'} ·
-        Desconto financeiro: ${cliente.desconto_financeiro_pct||0}% ·
         Prazo pagamento: ${cliente.prazo_pagamento_dias||0} dias
       </div>
     </div>
