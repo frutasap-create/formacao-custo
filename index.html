@@ -278,14 +278,18 @@ document.getElementById('formProduto').addEventListener('submit', async (e) => {
 function renderCustos(){
   const el = document.getElementById('listaCustos');
   if(produtos.length === 0){ el.innerHTML = '<div class="empty">Nenhum produto cadastrado ainda.</div>'; return; }
-  let html = '<table><thead><tr><th>Produto</th><th>Unidade</th><th>Custo unitário (R$)</th><th></th></tr></thead><tbody>';
+  let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+      <button class="btn" onclick="salvarTodosCustos()">💾 Salvar todos os custos</button>
+      <span id="msgCustos" style="font-size:.85rem; font-weight:600; color:var(--verde); opacity:0; transition:opacity .3s;"></span>
+    </div>
+    <table><thead><tr><th>Produto</th><th>Unidade</th><th>Custo unitário (R$)</th><th></th></tr></thead><tbody>`;
   produtos.forEach(p => {
     html += `<tr>
       <td>${p.nome}</td>
       <td><span class="pill">${p.unidade}</span></td>
       <td><input type="number" step="0.01" style="width:110px" value="${p.custo_unitario||0}" id="custo_${p.id}"></td>
       <td style="text-align:right">
-        <button class="btn secundario" style="padding:5px 10px; font-size:.78rem" onclick="salvarCusto('${p.id}')">Salvar</button>
         <button class="btn perigo" style="padding:5px 10px; font-size:.78rem" onclick="excluirProduto('${p.id}')">Excluir</button>
       </td>
     </tr>`;
@@ -294,10 +298,29 @@ function renderCustos(){
   el.innerHTML = html;
 }
 
-async function salvarCusto(produtoId){
-  const valor = parseFloat(document.getElementById('custo_'+produtoId).value) || 0;
-  await supabaseClient.from('produtos').update({custo_unitario: valor}).eq('id', produtoId);
-  await carregarTudo();
+async function salvarTodosCustos(){
+  const msg = document.getElementById('msgCustos');
+  msg.textContent = 'Salvando...';
+  msg.style.color = '#777';
+  msg.style.opacity = '1';
+  try {
+    // grava todos em paralelo
+    await Promise.all(produtos.map(p => {
+      const valor = parseFloat(document.getElementById('custo_'+p.id).value) || 0;
+      return supabaseClient.from('produtos').update({custo_unitario: valor}).eq('id', p.id);
+    }));
+    await carregarTudo();
+    const msg2 = document.getElementById('msgCustos');
+    if(msg2){
+      msg2.textContent = '✓ Custos salvos!';
+      msg2.style.color = 'var(--verde)';
+      msg2.style.opacity = '1';
+      setTimeout(() => { const m = document.getElementById('msgCustos'); if(m) m.style.opacity = '0'; }, 2500);
+    }
+  } catch(err){
+    const m = document.getElementById('msgCustos');
+    if(m){ m.textContent = '⚠️ Erro ao salvar. Tente de novo.'; m.style.color = 'var(--alerta)'; m.style.opacity = '1'; }
+  }
 }
 
 async function excluirProduto(id){
