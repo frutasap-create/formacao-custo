@@ -196,7 +196,7 @@ function renderClientes(){
           </select>
         </div>
         <div><label>Valor do frete (R$)</label><input type="number" step="0.01" value="${cl.valor_frete||0}" data-cliente="${cl.id}" data-campo="valor_frete" onchange="atualizarClienteCampo(this)"></div>
-        <div><label>Desconto financeiro (%)</label><input type="number" step="0.1" value="${cl.desconto_financeiro_pct||0}" data-cliente="${cl.id}" data-campo="desconto_financeiro_pct" onchange="atualizarClienteCampo(this)"></div>
+        <div><label>Acordo comercial (%)</label><input type="number" step="0.1" value="${cl.desconto_financeiro_pct||0}" data-cliente="${cl.id}" data-campo="desconto_financeiro_pct" onchange="atualizarClienteCampo(this)"></div>
         <div><label>Prazo recebimento (dias)</label><input type="number" value="${cl.prazo_pagamento_dias||0}" data-cliente="${cl.id}" data-campo="prazo_pagamento_dias" onchange="atualizarClienteCampo(this)"></div>
         <div><label>Taxa do dinheiro (% ao mês)</label><input type="number" step="0.01" value="${cl.taxa_mensal_pct||0}" data-cliente="${cl.id}" data-campo="taxa_mensal_pct" onchange="atualizarClienteCampo(this)"></div>
         <div><label>Margem mínima (%)</label><input type="number" step="0.1" value="${cl.margem_minima_pct||15}" data-cliente="${cl.id}" data-campo="margem_minima_pct" onchange="atualizarClienteCampo(this)"></div>
@@ -372,7 +372,8 @@ function renderVendaResultado(){
     const fatBruto = qtd * preco;
     const descontoRS = fatBruto * ((cliente.desconto_financeiro_pct||0)/100);
     const custoTotal = qtd * Number(p.custo_unitario||0);
-    const margemItem = fatBruto > 0 ? ((fatBruto - custoTotal) / fatBruto * 100) : 0;
+    const fatLiquidoItem = fatBruto - descontoRS;
+    const margemItem = fatLiquidoItem > 0 ? ((fatLiquidoItem - custoTotal) / fatLiquidoItem * 100) : 0;
     const precoZerado = qtd > 0 && preco === 0;
 
     if(qtd > 0){
@@ -426,7 +427,7 @@ function renderVendaResultado(){
   html += `
     <div class="resultado-box ${abaixoDoMinimo ? 'alerta' : 'ok'}">
       <div class="breakdown-row"><span>Faturamento Bruto</span><span>${fmt(totalFatBruto)}</span></div>
-      <div class="breakdown-row"><span>(−) Desconto financeiro (${cliente.desconto_financeiro_pct||0}%)</span><span>${fmt(totalDesconto)}</span></div>
+      <div class="breakdown-row"><span>(−) Acordo comercial (${cliente.desconto_financeiro_pct||0}%)</span><span>${fmt(totalDesconto)}</span></div>
       <div class="breakdown-row"><span>(−) Frete</span><span>${fmt(freteRS)}</span></div>
       <div class="breakdown-row"><span>(−) Comissão (${comissaoTipo === 'fixo' ? 'R$ fixo' : (cliente.comissao_valor||0)+'%'})</span><span>${fmt(comissaoRS)}</span></div>
       <div class="breakdown-row"><span>(−) Custo Total</span><span>${fmt(totalCusto)}</span></div>
