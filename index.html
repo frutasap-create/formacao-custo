@@ -210,13 +210,30 @@ function renderClientes(){
   const el = document.getElementById('listaClientes');
   if(clientes.length === 0){ el.innerHTML = '<div class="empty">Nenhum cliente cadastrado ainda.</div>'; return; }
   let html = '';
-  clientes.forEach(cl => {
+  const ordenados = [...clientes.filter(c => c.ativo !== false), ...clientes.filter(c => c.ativo === false)];
+  const nInativos = clientes.length - clientes.filter(c => c.ativo !== false).length;
+  if(nInativos > 0) html += `<div style="font-size:.78rem; color:var(--muda); margin-bottom:10px;">${clientes.length - nInativos} ativos · ${nInativos} inativos (no fim da lista)</div>`;
+  ordenados.forEach(cl => {
+    if(cl.ativo === false){
+      html += `
+    <div class="card" style="margin-bottom:6px; padding:10px 14px; background:var(--card2); opacity:.75; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+      <div><strong style="font-size:.9rem;">${cl.nome}</strong> <span class="pill" style="background:var(--alerta-bg); color:var(--alerta); margin-left:6px;">Inativo</span></div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn secundario" style="padding:4px 10px; font-size:.75rem" onclick="definirAtivoCliente('${cl.id}', true)">Reativar</button>
+        <button class="btn perigo" style="padding:4px 10px; font-size:.75rem" onclick="excluirCliente('${cl.id}')">Excluir</button>
+      </div>
+    </div>`;
+      return;
+    }
     const produtosDoCliente = vendas.filter(v => v.cliente_id === cl.id).map(v => v.produto_id);
     html += `
     <div class="card" style="margin-bottom:12px; background:var(--card2)">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <strong>${cl.nome}</strong>
-        <button class="btn perigo" style="padding:4px 10px; font-size:.75rem" onclick="excluirCliente('${cl.id}')">Excluir</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn secundario" style="padding:4px 10px; font-size:.75rem" onclick="definirAtivoCliente('${cl.id}', false)">Desativar</button>
+          <button class="btn perigo" style="padding:4px 10px; font-size:.75rem" onclick="excluirCliente('${cl.id}')">Excluir</button>
+        </div>
       </div>
       <div class="grid">
         <div>
@@ -279,6 +296,15 @@ async function toggleProdutoCliente(checkbox){
   } else {
     await supabaseClient.from('vendas_cliente_produto').delete()
       .eq('cliente_id', clienteId).eq('produto_id', produtoId);
+  }
+  await carregarTudo();
+}
+
+async function definirAtivoCliente(id, ativo){
+  const {error} = await supabaseClient.from('clientes').update({ativo}).eq('id', id);
+  if(error){
+    alert('Erro: ' + error.message + '\n\nSe falar em coluna "ativo", rode o SQL add_ativo_cliente.sql no Supabase.');
+    return;
   }
   await carregarTudo();
 }
@@ -372,7 +398,7 @@ async function excluirProduto(id){
 function renderVendaSelect(){
   const sel = document.getElementById('vendaCliente');
   const atual = sel.value;
-  sel.innerHTML = clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  sel.innerHTML = clientes.filter(c => c.ativo !== false).map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
   if(atual) sel.value = atual;
   renderVendaResultado();
 }
