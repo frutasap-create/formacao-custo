@@ -42,6 +42,7 @@
   table{ width:100%; border-collapse:collapse; font-size:.85rem; }
   .tbl{ width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .tbl table{ min-width:480px; }
+  #vendaResultado > .tbl table{ min-width:900px; }
   html, body{ max-width:100%; overflow-x:hidden; }
   input, select{ max-width:100%; }
   th, td{ text-align:left; padding:8px 6px; border-bottom:1px solid var(--borda); }
@@ -467,7 +468,7 @@ function renderVendaResultado(){
   const outrosCustosTotais = freteRS + comissaoRS + custoFinanceiro; // rateado por item abaixo
 
   // 2ª passada: monta a tabela já com a margem líquida por item (rateando frete+comissão+financeiro)
-  let html = `<div class="tbl"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th></tr></thead><tbody>`;
+  let html = `<div class="tbl"><table><thead><tr><th>Produto</th><th>Custo unit.</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th><th>Preço líq. (−acordo)</th><th>Preço líq. (−acordo −entrega)</th></tr></thead><tbody>`;
 
   itensCalc.forEach(it => {
     const share = totalFatBruto > 0 ? (it.fatBruto / totalFatBruto) : 0;
@@ -476,14 +477,21 @@ function renderVendaResultado(){
     const margemLiquidaItem = it.fatLiquidoItem > 0 ? (lucroLiquidoItem / it.fatLiquidoItem * 100) : 0;
 
     it.margemLiquida = it.qtd > 0 ? margemLiquidaItem : null;
+    const prodItem = produtos.find(x => x.id === it.v.produto_id) || {};
+    it.custoUnit = Number(prodItem.custo_unitario || 0);
+    it.precoLiqAcordo = it.preco * (1 - Number(cliente.desconto_financeiro_pct||0)/100);
+    it.precoLiqEntrega = it.qtd > 0 ? it.precoLiqAcordo - rateioOutros / it.qtd : null;
     html += `<tr style="${it.precoZerado ? 'background:var(--alerta-bg);' : ''}">
       <td>${it.nome}${it.precoZerado ? ' <span style="color:var(--alerta); font-size:.75rem; font-weight:600;">⚠️ sem preço</span>' : ''}</td>
+      <td>${fmt(it.custoUnit)}</td>
       <td><input type="number" step="1" style="width:90px" value="${it.qtd}" data-v="${it.v.id}" data-campo="quantidade" onchange="atualizarVenda(this)"></td>
       <td><input type="number" step="0.01" style="width:90px; ${it.precoZerado ? 'border-color:var(--alerta); border-width:2px;' : ''}" value="${it.preco}" data-v="${it.v.id}" data-campo="preco_venda" onchange="atualizarVenda(this)"></td>
       <td>${fmt(it.fatBruto)}</td>
       <td>${fmt(it.custoTotal)}</td>
       <td style="color:${it.qtd>0 && it.margemItem < (cliente.margem_minima_pct||0) ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${it.qtd>0 ? it.margemItem.toFixed(1)+'%' : '—'}</td>
       <td style="color:${it.qtd>0 && margemLiquidaItem < (cliente.margem_minima_pct||0) ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${it.qtd>0 ? margemLiquidaItem.toFixed(1)+'%' : '—'}</td>
+      <td>${fmt(it.precoLiqAcordo)}</td>
+      <td>${it.precoLiqEntrega !== null ? fmt(it.precoLiqEntrega) : '—'}</td>
     </tr>`;
   });
   html += '</tbody></table></div>';
@@ -589,7 +597,10 @@ function renderVendaResultado(){
       faturamento: i.fatBruto,
       custo: i.custoTotal,
       margem: i.margemItem,
-      margem_liquida: i.margemLiquida
+      margem_liquida: i.margemLiquida,
+      custo_unit: i.custoUnit,
+      preco_liq_acordo: i.precoLiqAcordo,
+      preco_liq_entrega: i.precoLiqEntrega
     }))
   };
 
