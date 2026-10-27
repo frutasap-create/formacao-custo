@@ -94,6 +94,8 @@
     --g-nav: rgba(14,22,38,.50);
     --g-blur: blur(14px) saturate(140%);
     --g-radius: 16px;
+    --g-lista: #0b1220;
+    color-scheme: dark;
   }
   :root[data-theme=light]{
     --g-fundo:
@@ -109,6 +111,8 @@
     --g-input: rgba(255,255,255,.78);
     --g-header: rgba(255,255,255,.60);
     --g-nav: rgba(255,255,255,.50);
+    --g-lista: #ffffff;
+    color-scheme: light;
   }
 
   /* Camada de fundo colorido: sem cor atrás, o vidro não aparece */
@@ -137,6 +141,8 @@
   }
   .resultado-box{ background:var(--g-bg-inner); }
   input, select, .checklist label{ background:var(--g-input); }
+  /* Lista aberta do select: precisa de fundo sólido (o translúcido vira branco no navegador) */
+  select option, select optgroup{ background:var(--g-lista); color:var(--texto); }
   th, td{ border-bottom-color:var(--g-border); }
 
   .kpi, .card{ transition:transform .25s ease, background .25s ease; }
