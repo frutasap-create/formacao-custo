@@ -206,7 +206,7 @@
     --g-bg: rgba(10,16,34,.55); --g-bg-forte: rgba(18,30,66,.70);
   }
   :root{ --t-wrap:rgba(5,10,24,.35); --t-th:rgba(12,22,50,.92); --t-th-c:#9fb4dc; --t-hover:rgba(59,130,246,.10); --t-in:rgba(8,14,32,.8); --t-in-b:rgba(96,165,250,.28); --t-sticky:rgba(9,16,38,.96); --t-line:rgba(96,165,250,.10); }
-  :root[data-theme=light]{ --t-wrap:rgba(255,255,255,.55); --t-th:#eef1f6; --t-th-c:#55607a; --t-hover:rgba(47,82,51,.07); --t-in:#fff; --t-in-b:#cfc8b6; --t-sticky:#fbfaf6; --t-line:#e6e0d0; }
+  :root[data-theme=light]{ --t-wrap:rgba(255,255,255,.55); --t-th:#e3ebfb; --t-th-c:#55607a; --t-hover:rgba(47,82,51,.07); --t-in:#fff; --t-in-b:#c3d0ea; --t-sticky:#f1f5fe; --t-line:#dbe4f5; }
   header h1{ letter-spacing:.2px; }
   :root:not([data-theme=light]) header h1 .logo-t{
     background:linear-gradient(90deg,#fff 0%,#9ec5ff 55%,#67e8f9 100%);
@@ -309,6 +309,34 @@
   .btn-preto{ position:fixed; right:14px; bottom:max(14px,env(safe-area-inset-bottom)); z-index:60; width:36px; height:36px; opacity:.85; border-radius:50%;
     border:1px solid var(--g-border); background:var(--g-bg-forte); color:var(--texto,#fff); font-size:17px; line-height:1; cursor:pointer;
     -webkit-backdrop-filter:var(--g-blur); backdrop-filter:var(--g-blur); box-shadow:var(--g-shadow); }
+
+  /* =====================================================================
+     VISUAL TECH - modo CLARO (glass azul / ciano / violeta). Só aparência.
+     ===================================================================== */
+  :root[data-theme=light]{
+    --creme:#eef3fc; --card:#ffffff; --card2:#f7f9ff; --borda:rgba(37,99,235,.16);
+    --verde:#059669; --btn:#2563eb; --btn-hover:#3b82f6; --muda:#5b6b8c; --texto:#14213d; --forte:#0f1b36;
+    --chip:rgba(37,99,235,.09); --chip-t:#1d4ed8;
+    --acc:#2563eb; --acc2:#0891b2;
+    --g-fundo:
+      radial-gradient(620px circle at 6% -4%, rgba(59,130,246,.34), transparent 62%),
+      radial-gradient(560px circle at 100% 10%, rgba(139,92,246,.26), transparent 62%),
+      radial-gradient(640px circle at 85% 105%, rgba(34,211,238,.28), transparent 62%),
+      linear-gradient(160deg, #eaf1ff 0%, #f3f0ff 55%, #eafbff 100%);
+    --g-bg: rgba(255,255,255,.64); --g-bg-forte: rgba(255,255,255,.84); --g-bg-inner: rgba(255,255,255,.55);
+    --g-border: rgba(255,255,255,.92);
+    --g-shadow: 0 8px 30px rgba(37,99,235,.14), inset 0 1px 0 rgba(255,255,255,.95);
+    --g-input: rgba(255,255,255,.85); --g-header: rgba(255,255,255,.66); --g-nav: rgba(255,255,255,.55); --g-lista:#fff;
+  }
+  :root[data-theme=light] header h1 .logo-t{ background:linear-gradient(90deg,#1d4ed8,#7c3aed); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent; }
+  :root[data-theme=light] nav button.active{ color:#1d4ed8; border-bottom-color:#06b6d4; }
+  :root[data-theme=light] nav button:hover{ background:rgba(37,99,235,.07); }
+  :root[data-theme=light] .sim-head .ic-big{ color:#2563eb; background:linear-gradient(135deg,rgba(59,130,246,.18),rgba(139,92,246,.18)); border-color:rgba(37,99,235,.25); box-shadow:0 0 18px rgba(59,130,246,.15); }
+  :root[data-theme=light] .kpi:hover{ box-shadow:0 12px 32px rgba(37,99,235,.20), 0 0 20px var(--kc); }
+  :root[data-theme=light] .kpi .val{ color:var(--forte); }
+  :root[data-theme=light] .resultado-box.ok{ background:rgba(16,185,129,.09); border-color:rgba(16,185,129,.35); }
+  :root[data-theme=light] button.btn.secundario{ color:#0e7490; border-color:rgba(8,145,178,.55); }
+  :root[data-theme=light] select:focus, :root[data-theme=light] input:focus{ box-shadow:0 0 0 3px rgba(59,130,246,.22); }
 </style>
 </head>
 <body>
