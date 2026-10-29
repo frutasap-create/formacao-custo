@@ -9,6 +9,9 @@
 <script>
 (function(){ try{ if(localStorage.getItem('tema')==='light') document.documentElement.setAttribute('data-theme','light'); }catch(e){} })();
 </script>
+<script>
+(function(){ try{ if(localStorage.getItem('fundo-preto')==='1') document.documentElement.setAttribute('data-preto','1'); }catch(e){} })();
+</script>
 <style>
   :root{
     --verde:#34d399; --btn:#059669; --btn-hover:#10b981; --creme:#0b1220; --texto:#e6ebf5; --muda:#8a97b0;
@@ -164,13 +167,166 @@
   @media (prefers-reduced-transparency: reduce){
     :root:root:root{ --g-bg:var(--card); --g-bg-forte:var(--card); --g-bg-inner:var(--card2); --g-input:var(--card2); --g-header:var(--card2); --g-nav:var(--card2); --g-border:var(--borda); --g-blur:none; }
   }
+
+
+  /* =====================================================================
+     VISUAL TECH (azul / ciano / violeta) - somente aparência.
+     Nenhuma fórmula, campo ou chamada ao banco foi alterado.
+     ===================================================================== */
+  :root:not([data-theme=light]){
+    --creme:#050a18; --card:#0b1226; --card2:#080e1f; --borda:rgba(96,165,250,.18);
+    --verde:#34d399; --muda:#8a9bbd; --texto:#e8eefc;
+    --acc:#3b82f6; --acc2:#22d3ee; --acc3:#8b5cf6;
+    --btn:#2563eb; --btn-hover:#3b82f6;
+    --chip:rgba(59,130,246,.14); --chip-t:#9ec1ff;
+    --g-fundo:
+      radial-gradient(620px circle at 8% -4%, rgba(59,130,246,.50), transparent 62%),
+      radial-gradient(560px circle at 100% 8%, rgba(139,92,246,.40), transparent 62%),
+      radial-gradient(640px circle at 85% 105%, rgba(34,211,238,.30), transparent 62%),
+      radial-gradient(520px circle at 0% 95%, rgba(37,99,235,.28), transparent 62%),
+      linear-gradient(160deg, #0a1736 0%, #060c1f 55%, #02040c 100%);
+    --g-bg: rgba(13,22,48,.55);
+    --g-bg-forte: rgba(22,36,78,.70);
+    --g-bg-inner: rgba(255,255,255,.035);
+    --g-border: rgba(96,165,250,.22);
+    --g-shadow: 0 10px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(147,197,253,.14);
+    --g-input: rgba(8,14,32,.65);
+    --g-header: rgba(6,12,30,.62);
+    --g-nav: rgba(6,12,30,.55);
+    --g-lista:#0a1128;
+    --g-radius:16px;
+  }
+  :root[data-preto]:not([data-theme=light]){
+    --creme:#000; --card:#05070d; --card2:#03050a;
+    --g-fundo:
+      radial-gradient(620px circle at 8% -4%, rgba(59,130,246,.38), transparent 62%),
+      radial-gradient(560px circle at 100% 8%, rgba(139,92,246,.30), transparent 62%),
+      radial-gradient(640px circle at 85% 105%, rgba(34,211,238,.22), transparent 62%),
+      #000;
+    --g-bg: rgba(10,16,34,.55); --g-bg-forte: rgba(18,30,66,.70);
+  }
+  :root{ --t-wrap:rgba(5,10,24,.35); --t-th:rgba(12,22,50,.92); --t-th-c:#9fb4dc; --t-hover:rgba(59,130,246,.10); --t-in:rgba(8,14,32,.8); --t-in-b:rgba(96,165,250,.28); --t-sticky:rgba(9,16,38,.96); --t-line:rgba(96,165,250,.10); }
+  :root[data-theme=light]{ --t-wrap:rgba(255,255,255,.55); --t-th:#eef1f6; --t-th-c:#55607a; --t-hover:rgba(47,82,51,.07); --t-in:#fff; --t-in-b:#cfc8b6; --t-sticky:#fbfaf6; --t-line:#e6e0d0; }
+  header h1{ letter-spacing:.2px; }
+  :root:not([data-theme=light]) header h1 .logo-t{
+    background:linear-gradient(90deg,#fff 0%,#9ec5ff 55%,#67e8f9 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent;
+  }
+  header{ border-bottom:1px solid var(--g-border); }
+  nav button{ transition:color .2s ease, background .2s ease; border-radius:10px 10px 0 0; }
+  nav button:hover{ color:var(--texto); background:rgba(96,165,250,.08); }
+  :root:not([data-theme=light]) nav button.active{ color:var(--acc2); border-bottom-color:var(--acc2); text-shadow:0 0 14px rgba(34,211,238,.45); }
+  main{ max-width:1180px; }
+
+  /* Cabeçalho da aba de simulação */
+  .sim-head{ display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+  .sim-head .ic-big{ width:44px; height:44px; flex:none; border-radius:14px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,rgba(59,130,246,.30),rgba(139,92,246,.30)); border:1px solid var(--g-border); color:#9ec5ff;
+    box-shadow:0 0 22px rgba(59,130,246,.25); }
+  .sim-head h2{ margin:0; font-size:1.25rem; }
+  .sim-head p{ margin:2px 0 0; font-size:.8rem; color:var(--muda); }
+  .sim-sel{ max-width:420px; }
+  select, input{ transition:border-color .2s ease, box-shadow .2s ease; }
+  select:focus, input:focus{ outline:none; border-color:var(--acc); box-shadow:0 0 0 3px rgba(59,130,246,.25), 0 0 18px rgba(34,211,238,.18); }
+
+  /* KPIs */
+  .kpis{ grid-template-columns:repeat(3,1fr); gap:12px; }
+  .kpi{ position:relative; overflow:hidden; padding:16px; }
+  .kpi::before{ content:""; position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .3s ease;
+    background:radial-gradient(240px circle at 85% 0%, var(--kc,rgba(59,130,246,.35)), transparent 70%); }
+  .kpi:hover::before{ opacity:1; }
+  .kpi:hover{ border-color:var(--kb,rgba(96,165,250,.55)); box-shadow:0 12px 36px rgba(0,0,0,.5), 0 0 24px var(--kc,rgba(59,130,246,.25)); }
+  .kpi .ic{ width:34px; height:34px; border-radius:10px; background:var(--ib,rgba(59,130,246,.16)) !important; color:var(--ic,#7aa2ff) !important;
+    border:1px solid var(--kb,rgba(96,165,250,.30)); }
+  .kpi .ic svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .kpi .top{ font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
+  .kpi .val{ font-size:1.45rem; letter-spacing:-.3px; font-variant-numeric:tabular-nums; margin:12px 0 10px; }
+  .kpi.azul  { --kc:rgba(59,130,246,.35);  --kb:rgba(96,165,250,.45); --ib:rgba(59,130,246,.16); --ic:#7aa2ff; }
+  .kpi.ambar { --kc:rgba(251,191,36,.28);  --kb:rgba(251,191,36,.40); --ib:rgba(251,191,36,.12); --ic:#fbbf24; }
+  .kpi.verde { --kc:rgba(52,211,153,.30);  --kb:rgba(52,211,153,.42); --ib:rgba(52,211,153,.12); --ic:#34d399; }
+  .kpi.laranja{--kc:rgba(251,146,60,.28);  --kb:rgba(251,146,60,.42); --ib:rgba(251,146,60,.12); --ic:#fb923c; }
+  .kpi.violeta{--kc:rgba(139,92,246,.35);  --kb:rgba(167,139,250,.45);--ib:rgba(139,92,246,.16); --ic:#a78bfa; }
+  .kpi.ciano { --kc:rgba(34,211,238,.30);  --kb:rgba(34,211,238,.42); --ib:rgba(34,211,238,.12); --ic:#22d3ee; }
+  .kpi.alerta{ --kc:rgba(248,113,113,.32); --kb:rgba(248,113,113,.50); --ib:rgba(248,113,113,.14); --ic:#f87171; }
+
+  /* Tabela de simulação */
+  #vendaResultado > .tbl{ border:1px solid var(--g-border); border-radius:14px; background:var(--t-wrap); margin-bottom:16px; }
+  #vendaResultado > .tbl table{ min-width:900px; }
+  #vendaResultado > .tbl th{ position:sticky; top:0; background:var(--t-th); color:var(--t-th-c); font-size:.66rem; letter-spacing:.5px; padding:10px 6px; white-space:normal; line-height:1.25; vertical-align:bottom; border-bottom:1px solid var(--g-border); }
+  #vendaResultado > .tbl td{ padding:7px 6px; white-space:nowrap; font-variant-numeric:tabular-nums; border-bottom:1px solid var(--t-line); }
+  #vendaResultado > .tbl tr:last-child td{ border-bottom:none; }
+  #vendaResultado > .tbl th:nth-child(n+2), #vendaResultado > .tbl td:nth-child(n+2){ text-align:right; }
+  #vendaResultado > .tbl td:first-child{ font-weight:600; }
+  #vendaResultado > .tbl tbody tr{ transition:background .15s ease; }
+  #vendaResultado > .tbl tbody tr:hover{ background:var(--t-hover); }
+  #vendaResultado > .tbl td input{ text-align:right; width:80px !important; padding:6px 8px; background:var(--t-in); border-color:var(--t-in-b); font-variant-numeric:tabular-nums; }
+  #vendaResultado > .tbl th:first-child, #vendaResultado > .tbl td:first-child{ position:sticky; left:0; z-index:1; background:var(--t-sticky); }
+  #vendaResultado > .tbl th:first-child{ z-index:2; }
+
+  .resultado-box{ border-radius:16px; }
+  .resultado-box.ok{ border-color:rgba(52,211,153,.38); box-shadow:0 0 28px rgba(52,211,153,.10); }
+  .resultado-box.alerta{ box-shadow:0 0 28px rgba(248,113,113,.14); }
+  button.btn{ background:linear-gradient(135deg,#2563eb,#7c3aed); border:1px solid rgba(147,197,253,.30); transition:transform .15s ease, box-shadow .2s ease, filter .2s ease; }
+  button.btn:hover{ filter:brightness(1.12); box-shadow:0 0 20px rgba(59,130,246,.45); transform:translateY(-1px); }
+  button.btn.secundario{ background:transparent; color:var(--acc2); border:1px solid rgba(34,211,238,.5); }
+  button.btn.secundario:hover{ background:rgba(34,211,238,.10); box-shadow:0 0 16px rgba(34,211,238,.25); }
+  button.btn.perigo{ background:#b91c1c; border-color:rgba(248,113,113,.5); }
+  .card{ border-color:var(--g-border); }
+
+  @media (max-width:640px){
+    main{ padding:14px 10px 70px; }
+    .kpis{ grid-template-columns:repeat(2,1fr); gap:8px; }
+    .kpi{ padding:12px; }
+    .kpi .val{ font-size:1.12rem; }
+    .kpi .top{ font-size:.66rem; gap:6px; }
+    .kpi .ic{ width:28px; height:28px; }
+    .sim-head h2{ font-size:1.05rem; }
+    .sim-head .ic-big{ width:38px; height:38px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .kpi::before, nav button, button.btn, #vendaResultado > .tbl tbody tr{ transition:none; }
+    button.btn:hover{ transform:none; }
+  }
+
+  /* ---- Botão FUNDO PRETO (OLED): independente do botão claro/escuro ---- */
+  :root[data-preto]{
+    --verde:#34d399; --btn:#059669; --btn-hover:#10b981; --creme:#000; --texto:#ececec; --muda:#8f8f8a;
+    --card:#0a0a0a; --card2:#050505; --borda:#1f1f1f; --alerta:#f87171; --alerta-bg:rgba(248,113,113,.12); --ok-bg:rgba(52,211,153,.10);
+    --forte:#fff; --chip:#161616; --chip-t:#b8b8b2;
+    --g-bg: rgba(255,255,255,.045);
+    --g-bg-forte: rgba(255,255,255,.08);
+    --g-border: rgba(255,255,255,.09);
+    --g-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+    --g-input: rgba(255,255,255,.07);
+    --g-fundo:
+      radial-gradient(520px circle at 0% 0%, rgba(225,29,72,.14), transparent 65%),
+      radial-gradient(640px circle at 100% 100%, rgba(22,163,74,.12), transparent 65%),
+      #000;
+    color-scheme: dark;
+    --g-bg-inner: rgba(255,255,255,.035);
+    --g-header: rgba(0,0,0,.65); --g-nav: rgba(0,0,0,.55); --g-lista:#0b0b0b;
+  }
+  .btn-preto{ position:fixed; right:14px; bottom:max(14px,env(safe-area-inset-bottom)); z-index:60; width:36px; height:36px; opacity:.85; border-radius:50%;
+    border:1px solid var(--g-border); background:var(--g-bg-forte); color:var(--texto,#fff); font-size:17px; line-height:1; cursor:pointer;
+    -webkit-backdrop-filter:var(--g-blur); backdrop-filter:var(--g-blur); box-shadow:var(--g-shadow); }
 </style>
 </head>
 <body>
 <div class="fundo-glass" aria-hidden="true"></div>
+<button class="btn-preto" id="btnPreto" type="button" aria-label="Alternar fundo preto" title="Fundo preto">&#9680;</button>
+<script>
+(function(){
+  var h=document.documentElement,b=document.getElementById('btnPreto');
+  b.addEventListener('click',function(){
+    var on=h.hasAttribute('data-preto');
+    if(on) h.removeAttribute('data-preto'); else h.setAttribute('data-preto','1');
+    try{ if(on) localStorage.removeItem('fundo-preto'); else localStorage.setItem('fundo-preto','1'); }catch(e){}
+  });
+})();
+</script>
 
 <header>
-  <h1>🍓 Formação de Preço de Venda — AP Frutas</h1>
+  <h1><span class="logo-e">🍓</span> <span class="logo-t">Formação de Preço de Venda — AP Frutas</span></h1>
   <div style="display:flex; gap:8px; align-items:center;"><button class="tema-btn" id="temaBtn" onclick="alternarTema()">☀️ Claro</button><span class="status" id="status">conectando...</span></div>
 </header>
 
@@ -235,8 +391,11 @@
   <!-- TAB VENDA -->
   <section id="tab-venda" style="display:none">
     <div class="card">
-      <h2>Simular venda por cliente</h2>
-      <div class="grid">
+      <div class="sim-head">
+        <span class="ic-big"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
+        <div><h2>Simulação de Vendas por Cliente</h2><p>Ajuste quantidades e preços e acompanhe faturamento, custos e margem em tempo real.</p></div>
+      </div>
+      <div class="grid sim-sel">
         <div><label>Cliente</label><select id="vendaCliente"></select></div>
       </div>
       <div id="vendaResultado"></div>
@@ -600,12 +759,12 @@ function renderVendaResultado(){
   const fatLiquido = totalFatBruto - totalDesconto;
   const pct = (x, base) => base > 0 ? (x/base*100).toFixed(1).replace('.',',') + '%' : '—';
   const kpiHtml = `<div class="kpis">
-    <div class="kpi"><div class="top"><span class="ic" style="background:#1e2f57;color:#7aa2ff">R$</span>Faturamento Bruto</div><div class="val">${fmt(totalFatBruto)}</div><span class="sub">${linhasCliente.length} produtos</span></div>
-    <div class="kpi"><div class="top"><span class="ic" style="background:#3a2a10;color:#fbbf24">%</span>Acordo comercial</div><div class="val">${fmt(totalDesconto)}</div><span class="sub">${pct(totalDesconto,totalFatBruto)} do bruto</span></div>
-    <div class="kpi"><div class="top"><span class="ic" style="background:#0f3329;color:#34d399">R$</span>Faturamento Líquido</div><div class="val">${fmt(fatLiquido)}</div><span class="sub">Bruto − acordo</span></div>
-    <div class="kpi"><div class="top"><span class="ic" style="background:#3a2a10;color:#fb923c">C</span>Custo Total</div><div class="val">${fmt(totalCusto)}</div><span class="sub">${pct(totalCusto,fatLiquido)} do líquido</span></div>
-    <div class="kpi"><div class="top"><span class="ic" style="background:#1e2f57;color:#7aa2ff">↗</span>Lucro Total</div><div class="val" style="color:${totalLucro<0?'var(--alerta)':'var(--forte)'}">${fmt(totalLucro)}</div><span class="sub ${totalLucro<0?'neg':'pos'}">${totalLucro<0?'↓ negativo':'↑ positivo'}</span></div>
-    <div class="kpi"><div class="top"><span class="ic" style="background:#0f3329;color:#34d399">%</span>Margem geral</div><div class="val" style="color:${abaixoDoMinimo?'var(--alerta)':'var(--verde)'}">${margemGeral.toFixed(1).replace('.',',')}%</div><span class="sub ${abaixoDoMinimo?'neg':'pos'}">mínima ${cliente.margem_minima_pct||0}%</span></div>
+    <div class="kpi azul"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></span>Faturamento Bruto</div><div class="val">${fmt(totalFatBruto)}</div><span class="sub">${linhasCliente.length} produtos</span></div>
+    <div class="kpi ambar"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>Acordo comercial</div><div class="val">${fmt(totalDesconto)}</div><span class="sub">${pct(totalDesconto,totalFatBruto)} do bruto</span></div>
+    <div class="kpi ciano"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span>Faturamento Líquido</div><div class="val">${fmt(fatLiquido)}</div><span class="sub">Bruto − acordo</span></div>
+    <div class="kpi laranja"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 5 7.7-5"/></svg></span>Custo Total</div><div class="val">${fmt(totalCusto)}</div><span class="sub">${pct(totalCusto,fatLiquido)} do líquido</span></div>
+    <div class="kpi ${totalLucro<0?'alerta':'verde'}"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>Lucro Total</div><div class="val" style="color:${totalLucro<0?'var(--alerta)':'var(--forte)'}">${fmt(totalLucro)}</div><span class="sub ${totalLucro<0?'neg':'pos'}">${totalLucro<0?'↓ negativo':'↑ positivo'}</span></div>
+    <div class="kpi ${abaixoDoMinimo?'alerta':'verde'}"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></span>Margem geral</div><div class="val" style="color:${abaixoDoMinimo?'var(--alerta)':'var(--verde)'}">${margemGeral.toFixed(1).replace('.',',')}%</div><span class="sub ${abaixoDoMinimo?'neg':'pos'}">mínima ${cliente.margem_minima_pct||0}%</span></div>
   </div>`;
   html = kpiHtml + html;
 
