@@ -1102,6 +1102,15 @@ async function atualizarVenda(input){
 }
 
 // ================= ANALISAR VENDA (antes de fechar) =================
+function _anEsc(t){ return String(t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function _anPc(n){ return Number(n).toFixed(1).replace('.', ',') + '%'; }
+function _anSinal(n){ return (n > 0 ? '+' : '') + Number(n).toFixed(1).replace('.', ',') + '%'; }
+function _anNum(id){
+  const el = document.getElementById(id);
+  const v = parseFloat(String(el && el.value != null ? el.value : '').replace(',', '.'));
+  return isNaN(v) ? 0 : v;
+}
+
 function analisarVenda(){
   const out = document.getElementById('analiseVenda');
   if(!out) return;
@@ -1109,10 +1118,6 @@ function analisarVenda(){
   if(!s || !s.itens || !s.itens.length){ out.innerHTML = '<div class="empty">Coloque quantidade em pelo menos um item.</div>'; return; }
   const B = Number(s.faturamento_bruto) || 0;
   if(B <= 0){ out.innerHTML = '<div class="empty">Faturamento zerado: preencha os preços de venda.</div>'; return; }
-
-  const esc = t => String(t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const pc = n => Number(n).toFixed(1).replace('.', ',') + '%';
-  const sinal = n => (n > 0 ? '+' : '') + Number(n).toFixed(1).replace('.', ',') + '%';
 
   const p = s.parametros || {};
   const A = Number(s.acordo_comercial) || 0;
@@ -1151,7 +1156,7 @@ function analisarVenda(){
   const linhaFaixa = (rotulo, k) => {
     if(k === null) return `<div class="breakdown-row"><span>${rotulo}</span><span>não fecha só com preço</span></div>`;
     const v = (k - 1) * 100;
-    return `<div class="breakdown-row"><span>${rotulo}</span><span>${fmt(B * k)} (${sinal(v)}${v < 0 ? ', folga' : ''})</span></div>`;
+    return `<div class="breakdown-row"><span>${rotulo}</span><span>${fmt(B * k)} (${_anSinal(v)}${v < 0 ? ', folga' : ''})</span></div>`;
   };
 
   // Sensibilidade
@@ -1161,8 +1166,23 @@ function analisarVenda(){
     ['Custo +5% e preço −3%', calc(0.97, 1.05)]
   ];
 
-  const baixos = s.itens.filter(i => i.margem_liquida != null && Number(i.margem_liquida) < min)
-    .sort((x, y) => x.margem_liquida - y.margem_liquida).slice(0, 5);
+  // Dados por item, para o ranking e para o simulador de cenário.
+  // "Preço p/ mínimo (só este)": quanto este item teria que subir, sozinho, para a venda bater a
+  // margem mínima nas duas bases (usa a base bruta, a mais exigente).
+  const kMinBruto = fatorMargem(false, min);
+  const deltaR = kMinBruto === null ? null : B * kMinBruto - B;
+  const itens = s.itens.map((it, idx) => {
+    const qtd = Number(it.qtd) || 0, preco = Number(it.preco) || 0, fat = Number(it.faturamento) || 0;
+    let atende = false, pNec = null, aumento = null;
+    if(deltaR !== null){
+      if(deltaR <= 0) atende = true;
+      else if(fat > 0 && qtd > 0){ pNec = Math.ceil((preco + deltaR / qtd) * 100) / 100; aumento = deltaR / fat * 100; }
+    }
+    return { idx, nome: it.nome, qtd, preco, fat, custo: Number(it.custo) || 0,
+             margemLiq: it.margem_liquida != null ? Number(it.margem_liquida) : 0, atende, pNec, aumento };
+  });
+  window._analiseDados = { itens, B, a, k0, fixos, C, lucro, min, deltaR };
+  const aumentoPadrao = deltaR !== null && deltaR > 0 ? Math.ceil(deltaR / B * 1000) / 10 : 0;
 
   // Veredito
   let titulo;
@@ -1173,38 +1193,131 @@ function analisarVenda(){
 
   let html = `<div class="resultado-box ${okLiq && okBr ? 'ok' : 'alerta'}">
     <div style="font-weight:700; margin-bottom:8px;">${titulo}</div>
-    <div class="breakdown-row"><span>Margem sobre fat. líquido (${fmt(fatLiq)})</span><span style="font-weight:700; color:${okLiq ? 'var(--verde)' : 'var(--alerta)'}">${pc(mLiq)}</span></div>
-    <div class="breakdown-row"><span>Margem sobre fat. bruto (${fmt(B)})</span><span style="font-weight:700; color:${okBr ? 'var(--verde)' : 'var(--alerta)'}">${pc(mBr)}</span></div>
-    <div class="breakdown-row"><span>Margem mínima do cliente</span><span>${pc(min)}</span></div>
+    <div class="breakdown-row"><span>Margem sobre fat. líquido (${fmt(fatLiq)})</span><span style="font-weight:700; color:${okLiq ? 'var(--verde)' : 'var(--alerta)'}">${_anPc(mLiq)}</span></div>
+    <div class="breakdown-row"><span>Margem sobre fat. bruto (${fmt(B)})</span><span style="font-weight:700; color:${okBr ? 'var(--verde)' : 'var(--alerta)'}">${_anPc(mBr)}</span></div>
+    <div class="breakdown-row"><span>Margem mínima do cliente</span><span>${_anPc(min)}</span></div>
     <div class="breakdown-row total"><span>Lucro total</span><span>${fmt(lucro)}</span></div>
   </div>`;
 
   html += `<div style="margin:14px 0 6px; font-weight:600; font-size:.85rem;">Faixa de preço desta simulação (faturamento bruto)</div>
     <div class="resultado-box">
       ${linhaFaixa('Equilíbrio (lucro zero)', fatorMargem(true, 0))}
-      ${linhaFaixa('Mínimo, base líquida (' + pc(min) + ')', fatorMargem(true, min))}
-      ${linhaFaixa('Mínimo, base bruta (' + pc(min) + ')', fatorMargem(false, min))}
+      ${linhaFaixa('Mínimo, base líquida (' + _anPc(min) + ')', fatorMargem(true, min))}
+      ${linhaFaixa('Mínimo, base bruta (' + _anPc(min) + ')', fatorMargem(false, min))}
       <div style="margin-top:6px; font-size:.75rem; color:var(--muda);">Todos os preços mudando na mesma proporção; frete e comissão fixa não mudam. A variação é em relação ao faturamento bruto atual.</div>
     </div>`;
 
   html += `<div style="margin:14px 0 6px; font-weight:600; font-size:.85rem;">E se o cenário piorar?</div>
     <div class="tbl"><table><thead><tr><th>Cenário</th><th>Margem líq.</th><th>Margem bruta</th><th>Lucro</th></tr></thead><tbody>
     ${cen.map(([n, r]) => `<tr><td>${n}</td>
-      <td style="color:${r.mLiq < min ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${pc(r.mLiq)}</td>
-      <td style="color:${r.mBr < min ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${pc(r.mBr)}</td>
+      <td style="color:${r.mLiq < min ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${_anPc(r.mLiq)}</td>
+      <td style="color:${r.mBr < min ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${_anPc(r.mBr)}</td>
       <td>${fmt(r.l)}</td></tr>`).join('')}
     </tbody></table></div>`;
 
-  if(baixos.length){
-    html += `<div style="margin:14px 0 6px; font-weight:600; font-size:.85rem;">Itens abaixo do mínimo (margem líquida)</div>
-      <div class="resultado-box">${baixos.map(i => `<div class="breakdown-row"><span>${esc(i.nome)}</span><span style="color:var(--alerta); font-weight:600">${pc(i.margem_liquida)}</span></div>`).join('')}</div>`;
-  }
+  html += `<div style="margin:16px 0 6px; font-weight:600; font-size:.85rem;">Ranking dos itens (não é recomendação)</div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+      <label style="margin:0;">Ordenar por</label>
+      <select id="rankOrdem" onchange="analiseRanking()" style="width:auto;">
+        <option value="comb">Melhor margem e volume</option>
+        <option value="vol">Maior volume</option>
+        <option value="marg">Melhor margem</option>
+        <option value="pior">Menor margem</option>
+      </select>
+    </div>
+    <div id="rankingItens"></div>
+    <div style="margin-top:6px; font-size:.75rem; color:var(--muda);">Volume = faturamento do item. O ranking mostra o peso e a margem de cada item, não a reação do cliente: o item de maior volume precisa do menor aumento para fechar a margem, mas isso não quer dizer que o cliente aceita. "Preço p/ mínimo" considera só aquele item subindo e usa a base bruta, a mais exigente.</div>`;
 
-  if(!confere) html += '<div class="aviso">⚠️ A conta da análise não bateu com o lucro do app. Os cenários e a faixa de preço não são confiáveis; me avise.</div>';
+  html += `<div style="margin:16px 0 6px; font-weight:600; font-size:.85rem;">Simular a reação do cliente</div>
+    <div class="grid">
+      <div><label>Aplicar em</label><select id="cenItem" onchange="analiseCenario()">
+        <option value="-1">Todos os itens</option>
+        ${itens.map(i => `<option value="${i.idx}">${_anEsc(i.nome)}</option>`).join('')}
+      </select></div>
+      <div><label>Aumento de preço (%)</label><input type="number" id="cenAumento" step="0.1" min="0" value="${aumentoPadrao.toFixed(1)}" oninput="analiseCenario()"></div>
+      <div><label>Queda de quantidade (%)</label><input type="number" id="cenQueda" step="1" min="0" max="100" value="0" oninput="analiseCenario()"></div>
+      <div><label>Excedente vendido a (% do preço atual)</label><input type="number" id="cenRec" step="1" min="0" max="150" value="0" oninput="analiseCenario()"></div>
+    </div>
+    <div id="cenResultado" style="margin-top:10px;"></div>`;
+
+  if(!confere) html += '<div class="aviso">⚠️ A conta da análise não bateu com o lucro do app. Os cenários, a faixa de preço e o simulador não são confiáveis; me avise.</div>';
   if(s.itens.some(i => !(Number(i.preco) > 0))) html += '<div class="aviso">⚠️ Há item sem preço: a análise está incompleta.</div>';
   html += '<div style="margin-top:10px; font-size:.75rem; color:var(--muda);">O custo financeiro segue a fórmula atual do app (taxa sobre o faturamento bruto).</div>';
 
   out.innerHTML = html;
+  analiseRanking();
+  analiseCenario();
+}
+
+// Ranking dos itens: melhor margem e volume (padrão), maior volume, melhor margem ou menor margem.
+function analiseRanking(){
+  const d = window._analiseDados, box = document.getElementById('rankingItens');
+  if(!d || !box) return;
+  const selEl = document.getElementById('rankOrdem');
+  const modo = (selEl && selEl.value) || 'comb';
+  const arr = d.itens.map(x => Object.assign({}, x, { peso: d.B > 0 ? x.fat / d.B * 100 : 0 }));
+  [...arr].sort((x, y) => y.margemLiq - x.margemLiq).forEach((x, n) => { x.rM = n + 1; });
+  [...arr].sort((x, y) => y.fat - x.fat).forEach((x, n) => { x.rV = n + 1; });
+  const ordens = {
+    comb: (x, y) => (x.rM + x.rV) - (y.rM + y.rV) || y.fat - x.fat,
+    vol: (x, y) => y.fat - x.fat,
+    marg: (x, y) => y.margemLiq - x.margemLiq,
+    pior: (x, y) => x.margemLiq - y.margemLiq
+  };
+  arr.sort(ordens[modo] || ordens.comb);
+  box.innerHTML = `<div class="tbl"><table><thead><tr><th>#</th><th>Item</th><th>Qtd</th><th>Volume (% do fat.)</th><th>Margem líq.</th><th>Preço atual</th><th>Preço p/ mínimo (só este)</th><th>Aumento</th></tr></thead><tbody>
+    ${arr.map((x, n) => {
+      const cor = x.margemLiq < d.min ? 'var(--alerta)' : 'var(--verde)';
+      const pn = x.atende || x.pNec === null ? '—' : fmt(x.pNec);
+      const aum = x.atende ? 'já atende' : (x.aumento === null ? '—' : _anSinal(x.aumento));
+      return `<tr><td>${n + 1}</td><td>${_anEsc(x.nome)}</td><td>${x.qtd}</td><td>${_anPc(x.peso)}</td>
+        <td style="color:${cor}; font-weight:600">${_anPc(x.margemLiq)}</td><td>${fmt(x.preco)}</td><td>${pn}</td><td>${aum}</td></tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+}
+
+// Simulador: aumento de preço + queda de quantidade + excedente vendido em outro canal.
+// Suposições: o custo da mercadoria que o cliente deixa de levar continua sendo seu (ela já existe);
+// o excedente é vendido pelo % informado do preço atual, sem frete nem comissão;
+// frete e comissão fixa não mudam com a quantidade.
+function analiseCenario(){
+  const d = window._analiseDados, box = document.getElementById('cenResultado');
+  if(!d || !box) return;
+  const g = Math.max(0, _anNum('cenAumento')) / 100;
+  const q = Math.min(100, Math.max(0, _anNum('cenQueda'))) / 100;
+  const rec = Math.min(150, Math.max(0, _anNum('cenRec'))) / 100;
+  const selEl = document.getElementById('cenItem');
+  const sel = parseInt(selEl ? selEl.value : '-1', 10);
+  const escopo = d.itens.filter(i => isNaN(sel) || sel < 0 || i.idx === sel);
+  const Rs = escopo.reduce((t, i) => t + i.fat, 0);
+  const Cs = escopo.reduce((t, i) => t + i.custo, 0);
+  const B2 = (d.B - Rs) + (1 - q) * Rs * (1 + g);
+  const lucroVenda = B2 * d.k0 - d.fixos - (d.C - q * Cs);          // custo só do que o cliente leva
+  const resultado = B2 * d.k0 - d.fixos - d.C + q * Rs * rec;       // custo de tudo + excedente vendido fora
+  const dif = resultado - d.lucro;
+  const mLiq = B2 > 0 ? lucroVenda / (B2 * (1 - d.a)) * 100 : 0;
+  const mBr = B2 > 0 ? lucroVenda / B2 * 100 : 0;
+
+  // Queda máxima de quantidade para não ganhar menos do que hoje (só faz sentido com aumento de preço)
+  let tolerancia = '—';
+  if(g > 0){
+    if(d.k0 <= 0) tolerancia = 'não se aplica';
+    else {
+      const den = (1 + g) * d.k0 - rec;
+      tolerancia = den <= 0 ? '100% (o excedente compensa)' : _anPc(Math.min(1, g * d.k0 / den) * 100);
+    }
+  }
+
+  const corDif = dif >= 0 ? 'var(--verde)' : 'var(--alerta)';
+  const pctDif = d.lucro !== 0 ? ' (' + _anSinal(dif / Math.abs(d.lucro) * 100) + ')' : '';
+  box.innerHTML = `<div class="resultado-box">
+    <div class="breakdown-row"><span>Lucro hoje</span><span>${fmt(d.lucro)}</span></div>
+    <div class="breakdown-row"><span>Resultado no cenário (inclui o excedente)</span><span style="font-weight:700; color:${corDif}">${fmt(resultado)}</span></div>
+    <div class="breakdown-row"><span>Diferença</span><span style="font-weight:700; color:${corDif}">${dif >= 0 ? '+' : '−'} ${fmt(Math.abs(dif))}${pctDif}</span></div>
+    <div class="breakdown-row"><span>Margem da venda ao cliente (líq. / bruta)</span><span>${_anPc(mLiq)} / ${_anPc(mBr)}</span></div>
+    <div class="breakdown-row"><span>Queda de quantidade tolerada para não ganhar menos que hoje</span><span>${tolerancia}</span></div>
+    <div style="margin-top:6px; font-size:.75rem; color:var(--muda);">O custo da mercadoria que o cliente deixa de levar continua sendo seu. Com 0% de excedente, o que ele não leva é perda total. Frete e comissão fixa não mudam com a quantidade. Só considera aumento de preço e queda de quantidade.</div>
+  </div>`;
 }
 
 // ================= VENDAS SALVAS =================
