@@ -813,6 +813,14 @@ function renderVendaResultado(){
     </div>
   `;
 
+  html += `
+    <div class="card" style="margin-top:14px;">
+      <h2>Analisar antes de fechar</h2>
+      <button class="btn" onclick="analisarVenda()">🔍 Analisar venda</button>
+      <div id="analiseVenda" style="margin-top:12px;"></div>
+    </div>
+  `;
+
   // ===== TABELAS PARA ENVIAR AO CLIENTE (só preço de venda, nunca custo) =====
   // Tabela 1: Lista de preços (produto + preço unitário)
   html += `
@@ -883,14 +891,6 @@ function renderVendaResultado(){
       preco_liq_entrega: i.precoLiqEntrega
     }))
   };
-
-  html += `
-    <div class="card" style="margin-top:14px;">
-      <h2>Analisar antes de fechar</h2>
-      <button class="btn" onclick="analisarVenda()">🔍 Analisar venda</button>
-      <div id="analiseVenda" style="margin-top:12px;"></div>
-    </div>
-  `;
 
   html += `
     <div class="card" style="margin-top:14px; border-color:var(--verde);">
