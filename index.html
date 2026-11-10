@@ -885,6 +885,14 @@ function renderVendaResultado(){
   };
 
   html += `
+    <div class="card" style="margin-top:14px;">
+      <h2>Analisar antes de fechar</h2>
+      <button class="btn" onclick="analisarVenda()">🔍 Analisar venda</button>
+      <div id="analiseVenda" style="margin-top:12px;"></div>
+    </div>
+  `;
+
+  html += `
     <div class="card" style="margin-top:14px; border-color:var(--verde);">
       <h2>Fechou esta venda?</h2>
       <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
@@ -1091,6 +1099,112 @@ async function atualizarVenda(input){
   const v = vendas.find(x => x.id === id);
   if(v) v[campo] = valor;
   renderVendaResultado();
+}
+
+// ================= ANALISAR VENDA (antes de fechar) =================
+function analisarVenda(){
+  const out = document.getElementById('analiseVenda');
+  if(!out) return;
+  const s = window._snapshotVenda;
+  if(!s || !s.itens || !s.itens.length){ out.innerHTML = '<div class="empty">Coloque quantidade em pelo menos um item.</div>'; return; }
+  const B = Number(s.faturamento_bruto) || 0;
+  if(B <= 0){ out.innerHTML = '<div class="empty">Faturamento zerado: preencha os preços de venda.</div>'; return; }
+
+  const esc = t => String(t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const pc = n => Number(n).toFixed(1).replace('.', ',') + '%';
+  const sinal = n => (n > 0 ? '+' : '') + Number(n).toFixed(1).replace('.', ',') + '%';
+
+  const p = s.parametros || {};
+  const A = Number(s.acordo_comercial) || 0;
+  const C = Number(s.custo_total) || 0;
+  const lucro = Number(s.lucro_total) || 0;
+  const min = Number(s.margem_minima) || 0;
+  const fatLiq = B - A;
+
+  // O que acompanha o preço (proporcional ao bruto) e o que é fixo
+  const a = Number(p.acordo_pct || 0) / 100;
+  const comFixa = p.comissao_tipo === 'fixo';
+  const cPct = comFixa ? 0 : Number(p.comissao_valor || 0) / 100;
+  const f = (Number(p.taxa_mensal_pct || 0) / 30 / 100) * (Number(p.dias_recebe || 0) - Number(p.dias_paga || 0));
+  const fixos = Number(s.frete || 0) + (comFixa ? Number(s.comissao || 0) : 0);
+  const k0 = 1 - a - cPct - f;
+
+  // Recalcula a venda com preço × kp e custo × kc
+  const calc = (kp, kc) => {
+    const b = B * kp, liq = b * (1 - a);
+    const l = b * k0 - fixos - C * kc;
+    return { l, mLiq: liq > 0 ? l / liq * 100 : 0, mBr: b > 0 ? l / b * 100 : 0 };
+  };
+  const base = calc(1, 1);
+  const confere = Math.abs(base.l - lucro) < 0.05; // a conta da análise bate com a do app?
+
+  const mLiq = fatLiq > 0 ? lucro / fatLiq * 100 : 0;
+  const mBr = lucro / B * 100;
+  const okLiq = mLiq >= min, okBr = mBr >= min;
+
+  // Faturamento bruto necessário para atingir uma margem m (todos os preços mudam na mesma proporção).
+  // Com m = 0 é o ponto de equilíbrio (lucro zero), igual nas duas bases.
+  const fatorMargem = (liquido, m) => {
+    const den = k0 - (m / 100) * (liquido ? (1 - a) : 1);
+    return den > 0 ? ((fixos + C) / den) / B : null;
+  };
+  const linhaFaixa = (rotulo, k) => {
+    if(k === null) return `<div class="breakdown-row"><span>${rotulo}</span><span>não fecha só com preço</span></div>`;
+    const v = (k - 1) * 100;
+    return `<div class="breakdown-row"><span>${rotulo}</span><span>${fmt(B * k)} (${sinal(v)}${v < 0 ? ', folga' : ''})</span></div>`;
+  };
+
+  // Sensibilidade
+  const cen = [
+    ['Custo +5%', calc(1, 1.05)],
+    ['Preço −3%', calc(0.97, 1)],
+    ['Custo +5% e preço −3%', calc(0.97, 1.05)]
+  ];
+
+  const baixos = s.itens.filter(i => i.margem_liquida != null && Number(i.margem_liquida) < min)
+    .sort((x, y) => x.margem_liquida - y.margem_liquida).slice(0, 5);
+
+  // Veredito
+  let titulo;
+  if(lucro < 0) titulo = '❌ Venda com prejuízo.';
+  else if(okLiq && okBr) titulo = '✅ Dentro da margem mínima nas duas bases.';
+  else if(okLiq) titulo = '⚠️ Passa no líquido, mas fica abaixo do mínimo no bruto (o app já mostra esse alerta).';
+  else titulo = '❌ Abaixo da margem mínima.';
+
+  let html = `<div class="resultado-box ${okLiq && okBr ? 'ok' : 'alerta'}">
+    <div style="font-weight:700; margin-bottom:8px;">${titulo}</div>
+    <div class="breakdown-row"><span>Margem sobre fat. líquido (${fmt(fatLiq)})</span><span style="font-weight:700; color:${okLiq ? 'var(--verde)' : 'var(--alerta)'}">${pc(mLiq)}</span></div>
+    <div class="breakdown-row"><span>Margem sobre fat. bruto (${fmt(B)})</span><span style="font-weight:700; color:${okBr ? 'var(--verde)' : 'var(--alerta)'}">${pc(mBr)}</span></div>
+    <div class="breakdown-row"><span>Margem mínima do cliente</span><span>${pc(min)}</span></div>
+    <div class="breakdown-row total"><span>Lucro total</span><span>${fmt(lucro)}</span></div>
+  </div>`;
+
+  html += `<div style="margin:14px 0 6px; font-weight:600; font-size:.85rem;">Faixa de preço desta simulação (faturamento bruto)</div>
+    <div class="resultado-box">
+      ${linhaFaixa('Equilíbrio (lucro zero)', fatorMargem(true, 0))}
+      ${linhaFaixa('Mínimo, base líquida (' + pc(min) + ')', fatorMargem(true, min))}
+      ${linhaFaixa('Mínimo, base bruta (' + pc(min) + ')', fatorMargem(false, min))}
+      <div style="margin-top:6px; font-size:.75rem; color:var(--muda);">Todos os preços mudando na mesma proporção; frete e comissão fixa não mudam. A variação é em relação ao faturamento bruto atual.</div>
+    </div>`;
+
+  html += `<div style="margin:14px 0 6px; font-weight:600; font-size:.85rem;">E se o cenário piorar?</div>
+    <div class="tbl"><table><thead><tr><th>Cenário</th><th>Margem líq.</th><th>Margem bruta</th><th>Lucro</th></tr></thead><tbody>
+    ${cen.map(([n, r]) => `<tr><td>${n}</td>
+      <td style="color:${r.mLiq < min ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${pc(r.mLiq)}</td>
+      <td style="color:${r.mBr < min ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${pc(r.mBr)}</td>
+      <td>${fmt(r.l)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+
+  if(baixos.length){
+    html += `<div style="margin:14px 0 6px; font-weight:600; font-size:.85rem;">Itens abaixo do mínimo (margem líquida)</div>
+      <div class="resultado-box">${baixos.map(i => `<div class="breakdown-row"><span>${esc(i.nome)}</span><span style="color:var(--alerta); font-weight:600">${pc(i.margem_liquida)}</span></div>`).join('')}</div>`;
+  }
+
+  if(!confere) html += '<div class="aviso">⚠️ A conta da análise não bateu com o lucro do app. Os cenários e a faixa de preço não são confiáveis; me avise.</div>';
+  if(s.itens.some(i => !(Number(i.preco) > 0))) html += '<div class="aviso">⚠️ Há item sem preço: a análise está incompleta.</div>';
+  html += '<div style="margin-top:10px; font-size:.75rem; color:var(--muda);">O custo financeiro segue a fórmula atual do app (taxa sobre o faturamento bruto).</div>';
+
+  out.innerHTML = html;
 }
 
 // ================= VENDAS SALVAS =================
