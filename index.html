@@ -361,6 +361,7 @@
 <nav>
   <button class="tab-btn active" data-tab="clientes">Clientes</button>
   <button class="tab-btn" data-tab="custos">Custos</button>
+  <button class="tab-btn" data-tab="formacao">Formação de Custo</button>
   <button class="tab-btn" data-tab="venda">Preço de Venda</button>
   <button class="tab-btn" data-tab="salvas">Vendas Salvas</button>
 </nav>
@@ -413,6 +414,15 @@
     <div class="card">
       <h2>Custo unitário por produto</h2>
       <div id="listaCustos"><div class="empty">Carregando...</div></div>
+    </div>
+  </section>
+
+  <!-- TAB FORMAÇÃO DE CUSTO -->
+  <section id="tab-formacao" style="display:none">
+    <div class="card">
+      <h2>Formação de custo do produto</h2>
+      <div style="font-size:.8rem; color:var(--muda); margin-bottom:12px;">Monte o custo de cada produto por unidade. <strong>Salvar</strong> só guarda a composição. <strong>Salvar e enviar para Custos</strong> também grava o total como Custo unitário do produto (altera o simulador).</div>
+      <div id="listaFormacao"><div class="empty">Carregando...</div></div>
     </div>
   </section>
 
@@ -472,6 +482,7 @@ async function carregarTudo(){
   vendas = vds || [];
   renderClientes();
   renderCustos();
+  renderFormacao();
   renderVendaSelect();
 }
 
@@ -675,6 +686,156 @@ async function excluirProduto(id){
   await carregarTudo();
 }
 
+// ================= FORMAÇÃO DE CUSTO =================
+const SUB_EMB = [
+  {k:'ec', col:'custo_emb_caixa',    nome:'Caixa (R$)'},
+  {k:'eb', col:'custo_emb_bandeja',  nome:'Bandeja (R$)'},
+  {k:'es', col:'custo_emb_saquinho', nome:'Saquinho (R$)'},
+  {k:'er', col:'custo_emb_rotulo',   nome:'Rótulo (R$)'}
+];
+const CAMPOS_FORMACAO = [
+  {k:'mp',  col:'custo_materia_prima',      nome:'Matéria-prima (R$)'},
+  {k:'mo',  col:'custo_mao_obra',           nome:'Mão de obra (R$)'},
+  {k:'desp',col:'custo_despesas_diversas',  nome:'Despesas diversas (R$)'}
+];
+
+function campoFormacao(c, p){
+  return `<div><label>${c.nome}</label><input type="number" step="0.01" min="0" value="${p[c.col]||0}" id="fm_${c.k}_${p.id}" oninput="calcFormacao('${p.id}')"></div>`;
+}
+
+function renderFormacao(){
+  const el = document.getElementById('listaFormacao');
+  if(!el) return;
+  if(produtos.length === 0){ el.innerHTML = '<div class="empty">Nenhum produto cadastrado ainda. Cadastre na aba Custos.</div>'; return; }
+  let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+      <button class="btn secundario" onclick="salvarFormacao()">💾 Salvar todos (sem enviar para Custos)</button>
+      <span id="msgFormacao" style="font-size:.85rem; font-weight:600; color:var(--verde); opacity:0; transition:opacity .3s;"></span>
+    </div>`;
+  produtos.forEach(p => {
+    html += `
+    <div class="card" style="margin-bottom:12px; background:var(--card2)">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+        <div><strong>${p.nome}</strong> <span class="pill" style="margin-left:6px;">${p.unidade}</span></div>
+        <div style="text-align:right;">
+          <div style="font-size:.7rem; color:var(--muda);">Custo total por ${p.unidade}</div>
+          <div id="fm_total_${p.id}" style="font-size:1.3rem; font-weight:800; color:var(--verde);"></div>
+        </div>
+      </div>
+      <div class="grid">
+        ${CAMPOS_FORMACAO.filter(c => c.k === 'mp').map(c => campoFormacao(c, p)).join('')}
+      </div>
+      <div style="margin-top:10px; padding:10px 12px; border:1px dashed var(--borda); border-radius:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:.8rem; font-weight:700;">Embalagens</span>
+          <span style="font-size:.8rem; color:var(--muda);">Total: <strong id="fm_embtot_${p.id}" style="color:var(--texto);"></strong></span>
+        </div>
+        <div class="grid">
+          ${SUB_EMB.map(c => campoFormacao(c, p)).join('')}
+        </div>
+        ${(!SUB_EMB.some(c => Number(p[c.col]) > 0) && Number(p.custo_embalagens) > 0) ? `<div style="font-size:.75rem; color:var(--alerta); margin-top:6px;">Valor antigo de embalagens: ${fmt(p.custo_embalagens)} — distribua entre caixa, bandeja, saquinho e rótulo.</div>` : ''}
+      </div>
+      <div class="grid" style="margin-top:10px;">
+        ${CAMPOS_FORMACAO.filter(c => c.k !== 'mp').map(c => campoFormacao(c, p)).join('')}
+        <div><label>Custo operacional (%)</label><input type="number" step="0.1" min="0" value="${p.custo_operacional_pct||0}" id="fm_op_${p.id}" oninput="calcFormacao('${p.id}')"></div>
+      </div>
+      <div id="fm_det_${p.id}" style="margin-top:10px; font-size:.8rem; color:var(--muda);"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;">
+        <button class="btn secundario" style="padding:7px 14px; font-size:.8rem" onclick="salvarFormacaoProduto('${p.id}', false)">💾 Salvar</button>
+        <button class="btn" style="padding:7px 14px; font-size:.8rem" onclick="salvarFormacaoProduto('${p.id}', true)">💾➡️ Salvar e enviar para Custos</button>
+        <span id="fm_msg_${p.id}" style="font-size:.8rem; font-weight:600; opacity:0; transition:opacity .3s;"></span>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+  produtos.forEach(p => calcFormacao(p.id));
+}
+
+function calcFormacao(id){
+  const v = k => parseFloat(document.getElementById('fm_'+k+'_'+id).value) || 0;
+  const emb = v('ec') + v('eb') + v('es') + v('er');
+  document.getElementById('fm_embtot_'+id).textContent = fmt(emb);
+  const subtotal = v('mp') + emb + v('mo') + v('desp');
+  const pct = v('op');
+  const custoOp = subtotal * pct / 100;
+  const total = subtotal + custoOp;
+  const p = produtos.find(x => x.id === id) || {};
+  const atual = Number(p.custo_unitario || 0);
+  let dif = total - atual; if(Math.abs(dif) < 0.005) dif = 0;
+  document.getElementById('fm_total_'+id).textContent = fmt(total);
+  document.getElementById('fm_det_'+id).innerHTML =
+    `Matéria-prima ${fmt(v('mp'))} + embalagens ${fmt(emb)} + mão de obra ${fmt(v('mo'))} + despesas ${fmt(v('desp'))} = subtotal ${fmt(subtotal)}<br>Subtotal ${fmt(subtotal)} + custo operacional (${pct}%) ${fmt(custoOp)} = <strong style="color:var(--texto)">${fmt(total)}</strong><br>` +
+    `Custo unitário na aba Custos: ${fmt(atual)} · ` +
+    (atual > 0 ? `diferença <span style="color:${Math.abs(dif)<0.005?'var(--verde)':'var(--alerta)'}; font-weight:600">${dif>0?'+':''}${fmt(dif)}</span>` : 'sem custo cadastrado lá');
+}
+
+function valoresFormacao(id){
+  const v = k => parseFloat(document.getElementById('fm_'+k+'_'+id).value) || 0;
+  const emb = v('ec') + v('eb') + v('es') + v('er');
+  const subtotal = v('mp') + emb + v('mo') + v('desp');
+  const total = Math.round(subtotal * (1 + v('op')/100) * 100) / 100;
+  return {
+    campos: {
+      custo_materia_prima: v('mp'),
+      custo_emb_caixa: v('ec'), custo_emb_bandeja: v('eb'), custo_emb_saquinho: v('es'), custo_emb_rotulo: v('er'),
+      custo_embalagens: emb,
+      custo_mao_obra: v('mo'), custo_despesas_diversas: v('desp'), custo_operacional_pct: v('op')
+    },
+    total
+  };
+}
+
+async function salvarFormacaoProduto(id, enviar){
+  const p = produtos.find(x => x.id === id);
+  if(!p) return;
+  const msg = document.getElementById('fm_msg_'+id);
+  const {campos, total} = valoresFormacao(id);
+  const atual = Number(p.custo_unitario || 0);
+  if(enviar && atual > 0 && Math.abs(atual - total) >= 0.005){
+    if(!confirm(p.nome + '\n\nO Custo unitário na aba Custos vai mudar de ' + fmt(atual) + ' para ' + fmt(total) + ' e isso altera o simulador.\n\nContinuar?')) return;
+  }
+  msg.textContent = 'Salvando...'; msg.style.color = 'var(--muda)'; msg.style.opacity = '1';
+  const dados = enviar ? {...campos, custo_unitario: total} : campos;
+  const {error} = await supabaseClient.from('produtos').update(dados).eq('id', id);
+  if(error){
+    msg.textContent = '⚠️ Erro: ' + error.message + ' (rode os SQLs add_formacao_custo.sql e add_embalagens_sub.sql no Supabase)';
+    msg.style.color = 'var(--alerta)';
+    return;
+  }
+  Object.assign(p, dados);   // atualiza só este produto, sem apagar o que você digitou nos outros
+  calcFormacao(id);
+  if(enviar) renderCustos();
+  msg.textContent = enviar ? '✓ Salvo e enviado para Custos (' + fmt(total) + ')' : '✓ Salvo';
+  msg.style.color = 'var(--verde)';
+  setTimeout(() => { const m = document.getElementById('fm_msg_'+id); if(m) m.style.opacity = '0'; }, 3500);
+}
+
+async function salvarFormacao(){
+  const msg = document.getElementById('msgFormacao');
+  msg.textContent = 'Salvando...'; msg.style.color = 'var(--muda)'; msg.style.opacity = '1';
+  try {
+    const resultados = await Promise.all(produtos.map(p => {
+      const v = k => parseFloat(document.getElementById('fm_'+k+'_'+p.id).value) || 0;
+      return supabaseClient.from('produtos').update({
+        custo_materia_prima: v('mp'),
+        custo_emb_caixa: v('ec'), custo_emb_bandeja: v('eb'), custo_emb_saquinho: v('es'), custo_emb_rotulo: v('er'),
+        custo_embalagens: v('ec') + v('eb') + v('es') + v('er'),
+        custo_mao_obra: v('mo'),
+        custo_despesas_diversas: v('desp'), custo_operacional_pct: v('op')
+      }).eq('id', p.id);
+    }));
+    const erro = resultados.find(r => r.error);
+    if(erro) throw new Error(erro.error.message);
+    await carregarTudo();
+    const m = document.getElementById('msgFormacao');
+    if(m){ m.textContent = '✓ Composição salva!'; m.style.color = 'var(--verde)'; m.style.opacity = '1';
+      setTimeout(() => { const x = document.getElementById('msgFormacao'); if(x) x.style.opacity = '0'; }, 2500); }
+  } catch(err){
+    const m = document.getElementById('msgFormacao');
+    if(m){ m.textContent = '⚠️ Erro: ' + err.message + ' (rode os SQLs add_formacao_custo.sql e add_embalagens_sub.sql no Supabase)'; m.style.color = 'var(--alerta)'; m.style.opacity = '1'; }
+  }
+}
+
 // ================= PREÇO DE VENDA =================
 function renderVendaSelect(){
   const sel = document.getElementById('vendaCliente');
@@ -746,13 +907,14 @@ function renderVendaResultado(){
   const custoFinanceiro = totalFatBruto * (taxaDiaria/100) * diasDif; // positivo = desconta; negativo = soma
 
   const outrosCustosTotais = freteRS + comissaoRS + custoFinanceiro; // rateado por item abaixo
+  const outrosParaMargem = freteRS + comissaoRS + Math.max(custoFinanceiro, 0); // ganho financeiro NÃO entra na margem líquida do item
 
   // 2ª passada: monta a tabela já com a margem líquida por item (rateando frete+comissão+financeiro)
   let html = `<div class="tbl"><table><thead><tr><th>Produto</th><th>Custo unit.</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th><th>Preço líq. (−acordo)</th><th>Preço líq. (−acordo −entrega)</th></tr></thead><tbody>`;
 
   itensCalc.forEach(it => {
     const share = totalFatBruto > 0 ? (it.fatBruto / totalFatBruto) : 0;
-    const rateioOutros = share * outrosCustosTotais;
+    const rateioOutros = share * outrosParaMargem;
     const lucroLiquidoItem = it.fatLiquidoItem - it.custoTotal - rateioOutros;
     const margemLiquidaItem = it.fatLiquidoItem > 0 ? (lucroLiquidoItem / it.fatLiquidoItem * 100) : 0;
 
