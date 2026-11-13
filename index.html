@@ -724,6 +724,8 @@ function renderFormacao(){
       </div>
       <div class="grid">
         ${CAMPOS_FORMACAO.filter(c => c.k === 'mp').map(c => campoFormacao(c, p)).join('')}
+        <div><label>Quebra (%)</label><input type="number" step="0.1" min="0" value="${p.custo_quebra_pct||0}" id="fm_qb_${p.id}" oninput="calcFormacao('${p.id}')"></div>
+        <div><label>Matéria-prima com quebra</label><div id="fm_mpq_${p.id}" style="padding:8px 10px; font-weight:700; color:var(--texto);"></div></div>
       </div>
       <div style="margin-top:10px; padding:10px 12px; border:1px dashed var(--borda); border-radius:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
@@ -755,7 +757,9 @@ function calcFormacao(id){
   const v = k => parseFloat(document.getElementById('fm_'+k+'_'+id).value) || 0;
   const emb = v('ec') + v('eb') + v('es') + v('er');
   document.getElementById('fm_embtot_'+id).textContent = fmt(emb);
-  const subtotal = v('mp') + emb + v('mo') + v('desp');
+  const mpQuebra = v('mp') * (1 + v('qb')/100);
+  document.getElementById('fm_mpq_'+id).textContent = fmt(mpQuebra);
+  const subtotal = mpQuebra + emb + v('mo') + v('desp');
   const pct = v('op');
   const custoOp = subtotal * pct / 100;
   const total = subtotal + custoOp;
@@ -764,7 +768,7 @@ function calcFormacao(id){
   let dif = total - atual; if(Math.abs(dif) < 0.005) dif = 0;
   document.getElementById('fm_total_'+id).textContent = fmt(total);
   document.getElementById('fm_det_'+id).innerHTML =
-    `Matéria-prima ${fmt(v('mp'))} + embalagens ${fmt(emb)} + mão de obra ${fmt(v('mo'))} + despesas ${fmt(v('desp'))} = subtotal ${fmt(subtotal)}<br>Subtotal ${fmt(subtotal)} + custo operacional (${pct}%) ${fmt(custoOp)} = <strong style="color:var(--texto)">${fmt(total)}</strong><br>` +
+    `Matéria-prima ${fmt(v('mp'))} + quebra ${v('qb')}% (${fmt(mpQuebra - v('mp'))}) = ${fmt(mpQuebra)} · embalagens ${fmt(emb)} + mão de obra ${fmt(v('mo'))} + despesas ${fmt(v('desp'))} = subtotal ${fmt(subtotal)}<br>Subtotal ${fmt(subtotal)} + custo operacional (${pct}%) ${fmt(custoOp)} = <strong style="color:var(--texto)">${fmt(total)}</strong><br>` +
     `Custo unitário na aba Custos: ${fmt(atual)} · ` +
     (atual > 0 ? `diferença <span style="color:${Math.abs(dif)<0.005?'var(--verde)':'var(--alerta)'}; font-weight:600">${dif>0?'+':''}${fmt(dif)}</span>` : 'sem custo cadastrado lá');
 }
@@ -772,11 +776,11 @@ function calcFormacao(id){
 function valoresFormacao(id){
   const v = k => parseFloat(document.getElementById('fm_'+k+'_'+id).value) || 0;
   const emb = v('ec') + v('eb') + v('es') + v('er');
-  const subtotal = v('mp') + emb + v('mo') + v('desp');
+  const subtotal = v('mp') * (1 + v('qb')/100) + emb + v('mo') + v('desp');
   const total = Math.round(subtotal * (1 + v('op')/100) * 100) / 100;
   return {
     campos: {
-      custo_materia_prima: v('mp'),
+      custo_materia_prima: v('mp'), custo_quebra_pct: v('qb'),
       custo_emb_caixa: v('ec'), custo_emb_bandeja: v('eb'), custo_emb_saquinho: v('es'), custo_emb_rotulo: v('er'),
       custo_embalagens: emb,
       custo_mao_obra: v('mo'), custo_despesas_diversas: v('desp'), custo_operacional_pct: v('op')
@@ -798,7 +802,7 @@ async function salvarFormacaoProduto(id, enviar){
   const dados = enviar ? {...campos, custo_unitario: total} : campos;
   const {error} = await supabaseClient.from('produtos').update(dados).eq('id', id);
   if(error){
-    msg.textContent = '⚠️ Erro: ' + error.message + ' (rode os SQLs add_formacao_custo.sql e add_embalagens_sub.sql no Supabase)';
+    msg.textContent = '⚠️ Erro: ' + error.message + ' (rode o SQL add_quebra.sql no Supabase)';
     msg.style.color = 'var(--alerta)';
     return;
   }
@@ -817,7 +821,7 @@ async function salvarFormacao(){
     const resultados = await Promise.all(produtos.map(p => {
       const v = k => parseFloat(document.getElementById('fm_'+k+'_'+p.id).value) || 0;
       return supabaseClient.from('produtos').update({
-        custo_materia_prima: v('mp'),
+        custo_materia_prima: v('mp'), custo_quebra_pct: v('qb'),
         custo_emb_caixa: v('ec'), custo_emb_bandeja: v('eb'), custo_emb_saquinho: v('es'), custo_emb_rotulo: v('er'),
         custo_embalagens: v('ec') + v('eb') + v('es') + v('er'),
         custo_mao_obra: v('mo'),
@@ -832,7 +836,7 @@ async function salvarFormacao(){
       setTimeout(() => { const x = document.getElementById('msgFormacao'); if(x) x.style.opacity = '0'; }, 2500); }
   } catch(err){
     const m = document.getElementById('msgFormacao');
-    if(m){ m.textContent = '⚠️ Erro: ' + err.message + ' (rode os SQLs add_formacao_custo.sql e add_embalagens_sub.sql no Supabase)'; m.style.color = 'var(--alerta)'; m.style.opacity = '1'; }
+    if(m){ m.textContent = '⚠️ Erro: ' + err.message + ' (rode o SQL add_quebra.sql no Supabase)'; m.style.color = 'var(--alerta)'; m.style.opacity = '1'; }
   }
 }
 
