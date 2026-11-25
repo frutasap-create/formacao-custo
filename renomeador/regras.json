@@ -1,0 +1,26 @@
+{
+  "minutos_minimos": 5,
+  "caminho_pdftotext": "C:\\poppler\\Library\\bin\\pdftotext.exe",
+  "ignorar_extensoes": [".crdownload", ".tmp", ".part", ".partial", ".download", ".opdownload", ".exe", ".msi", ".lnk", ".ini", ".zip", ".rar", ".7z"],
+  "ignorar_padroes": ["tabela-precos-*", "~$*", "desktop.ini"],
+  "pessoal": ["cantos fieis", "folha dos musicos", "minicurso", "plazon"],
+  "entidades": [
+    { "nome": "Santander", "palavras": ["santander"] },
+    { "nome": "Verdemar", "palavras": ["verdemar"] },
+    { "nome": "Frutas e Verduras AP", "palavras": ["frutas e verduras ap"] }
+  ],
+  "tipos": [
+    { "tipo": "Fluxo de Caixa", "palavras": ["fluxo de caixa"] },
+    { "tipo": "Faturamento", "palavras": ["faturamento"] },
+    { "tipo": "Fatura", "palavras": ["fatura"] },
+    { "tipo": "Extrato", "palavras": ["extrato"] },
+    { "tipo": "Pedido de Compra", "palavras": ["pedido de compra"] },
+    { "tipo": "Nota Fiscal", "palavras": ["nota fiscal", "danfe", "nf e"] },
+    { "tipo": "Boleto", "palavras": ["boleto", "linha digitavel"] },
+    { "tipo": "Comprovante", "palavras": ["comprovante"] },
+    { "tipo": "Recibo", "palavras": ["recibo"] },
+    { "tipo": "Contrato", "palavras": ["contrato"] },
+    { "tipo": "Orcamento", "palavras": ["orcamento"] },
+    { "tipo": "Tabela de Precos", "palavras": ["tabela de precos"] }
+  ]
+}
