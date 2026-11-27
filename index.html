@@ -337,6 +337,18 @@
   :root[data-theme=light] .resultado-box.ok{ background:rgba(16,185,129,.09); border-color:rgba(16,185,129,.35); }
   :root[data-theme=light] button.btn.secundario{ color:#0e7490; border-color:rgba(8,145,178,.55); }
   :root[data-theme=light] select:focus, :root[data-theme=light] input:focus{ box-shadow:0 0 0 3px rgba(59,130,246,.22); }
+
+  /* cards de margem por produto (mais claros no escuro, mais escuros no claro) */
+  :root{ --cm-bg:rgba(255,255,255,.08); --cm-bd:rgba(255,255,255,.14); }
+  :root[data-theme=light]{ --cm-bg:rgba(15,27,54,.07); --cm-bd:rgba(15,27,54,.14); }
+  .cards-prod{ display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:10px; margin:0 0 14px; }
+  .cp{ background:var(--cm-bg); border:1px solid var(--cm-bd); border-radius:12px; padding:10px 12px; }
+  .cp-nome{ font-size:.86rem; font-weight:700; color:var(--forte,var(--texto)); margin-bottom:8px; text-align:left; }
+  .cp-grade{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .cm{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .cm-t{ font-size:.62rem; color:var(--muda); letter-spacing:.2px; line-height:1.2; }
+  .cm-v{ font-size:.98rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  @media (max-width:560px){ .cp-grade{ grid-template-columns:repeat(2,1fr); gap:8px; } }
 </style>
 </head>
 <body>
@@ -769,6 +781,7 @@ function calcFormacao(id){
   document.getElementById('fm_total_'+id).textContent = fmt(total);
   document.getElementById('fm_det_'+id).innerHTML =
     `Matéria-prima ${fmt(v('mp'))} + quebra ${v('qb')}% (${fmt(mpQuebra - v('mp'))}) = ${fmt(mpQuebra)} · embalagens ${fmt(emb)} + mão de obra ${fmt(v('mo'))} + despesas ${fmt(v('desp'))} = subtotal ${fmt(subtotal)}<br>Subtotal ${fmt(subtotal)} + custo operacional (${pct}%) ${fmt(custoOp)} = <strong style="color:var(--texto)">${fmt(total)}</strong><br>` +
+    `<span style="color:var(--texto)">Custo variável ${fmt(mpQuebra + emb + v('desp'))}</span> (matéria-prima c/ quebra + embalagens + despesas) · <span style="color:var(--texto)">custo fixo ${fmt(v('mo') + custoOp)}</span> (mão de obra + custo operacional)<br>` +
     `Custo unitário na aba Custos: ${fmt(atual)} · ` +
     (atual > 0 ? `diferença <span style="color:${Math.abs(dif)<0.005?'var(--verde)':'var(--alerta)'}; font-weight:600">${dif>0?'+':''}${fmt(dif)}</span>` : 'sem custo cadastrado lá');
 }
@@ -850,6 +863,25 @@ function renderVendaSelect(){
 }
 document.getElementById('vendaCliente').addEventListener('change', renderVendaResultado);
 
+// Classificação dos custos (definida pelo Tiago):
+// variáveis = matéria-prima com quebra + embalagens + despesas diversas
+// fixos     = mão de obra + custo operacional (%) (rateio)
+function partesCusto(p){
+  const n = k => Number(p[k] || 0);
+  const mpq = n('custo_materia_prima') * (1 + n('custo_quebra_pct')/100);
+  const subEmb = n('custo_emb_caixa') + n('custo_emb_bandeja') + n('custo_emb_saquinho') + n('custo_emb_rotulo');
+  const emb = subEmb > 0 ? subEmb : n('custo_embalagens');
+  const mo = n('custo_mao_obra'), desp = n('custo_despesas_diversas');
+  const subtotal = mpq + emb + mo + desp;
+  const fixo = mo + subtotal * n('custo_operacional_pct') / 100;
+  return { temComp: subtotal > 0, variavel: mpq + emb + desp, fixo, total: subtotal + subtotal * n('custo_operacional_pct') / 100 };
+}
+const COR_SEMAFORO = { verde:'var(--verde)', amarelo:'#f5b301', vermelho:'var(--alerta)' };
+function bolinha(st, titulo){
+  if(!st) return '';
+  return `<span title="${titulo||''}" style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${COR_SEMAFORO[st]}; margin-right:6px; vertical-align:middle;"></span>`;
+}
+
 window._custoSim = window._custoSim || {};
 try { window._ordemSim = localStorage.getItem('ordemSim') || 'nome'; } catch(e){ window._ordemSim = 'nome'; }
 function definirOrdemSim(v){
@@ -900,6 +932,9 @@ function renderVendaResultado(){
     const custoGeral = Number(p.custo_unitario||0);
     const chaveCusto = clienteId + ':' + p.id;
     const custoUsado = (window._custoSim && window._custoSim[chaveCusto] !== undefined) ? window._custoSim[chaveCusto] : custoGeral;
+    const pc = partesCusto(p);
+    const fixoUnit = pc.temComp ? Math.min(pc.fixo, custoUsado) : 0;   // custo alterado na simulação: mantém a parte fixa, muda a variável
+    const varUnit = custoUsado - fixoUnit;
     const custoTotal = qtd * custoUsado;
     const fatLiquidoItem = fatBruto - descontoRS;
     const margemItem = fatLiquidoItem > 0 ? ((fatLiquidoItem - custoTotal) / fatLiquidoItem * 100) : 0;
@@ -918,22 +953,7 @@ function renderVendaResultado(){
       linhasCliente.push({nome: p.nome, unidade: p.unidade, qtd, preco, total: fatBruto});
     }
 
-    itensCalc.push({nome: p.nome, prodId: p.id, custoGeral, custoUsado, v, qtd, preco, fatBruto, descontoRS, custoTotal, fatLiquidoItem, margemItem, precoZerado});
-  });
-
-  // ordenação: tabelas do cliente sempre em ordem alfabética; a tabela de análise segue a opção escolhida
-  const cmpNome = (a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR', {sensitivity:'base'});
-  linhasCliente.sort(cmpNome);
-  const ordem = window._ordemSim || 'nome';
-  const key = {
-    margem_desc: i => i.margemItem, margem_asc: i => i.margemItem,
-    fat_desc: i => i.fatBruto, qtd_desc: i => i.qtd
-  }[ordem];
-  itensCalc.sort((a, b) => {
-    if(!key) return cmpNome(a, b);                       // A–Z
-    if((a.qtd > 0) !== (b.qtd > 0)) return a.qtd > 0 ? -1 : 1;   // sem quantidade vai para o fim
-    const d = ordem === 'margem_asc' ? key(a) - key(b) : key(b) - key(a);
-    return d !== 0 ? d : cmpNome(a, b);
+    itensCalc.push({nome: p.nome, prodId: p.id, custoGeral, custoUsado, fixoUnit, varUnit, temComp: pc.temComp, v, qtd, preco, fatBruto, descontoRS, custoTotal, fatLiquidoItem, margemItem, precoZerado});
   });
 
   // Frete e comissão: aplicados UMA vez sobre o total da venda
@@ -954,14 +974,59 @@ function renderVendaResultado(){
   const outrosCustosTotais = freteRS + comissaoRS + custoFinanceiro; // rateado por item abaixo
   const outrosParaMargem = freteRS + comissaoRS + Math.max(custoFinanceiro, 0); // ganho financeiro NÃO entra na margem líquida do item
 
+  // ===== Margem de contribuição, preço mínimo e preço-alvo =====
+  // Tudo que varia com a venda vira % do faturamento bruto: comissão %, custo financeiro (só se for custo) e
+  // frete/comissão fixa do pedido rateados pelo faturamento (mesmo rateio da Margem Líquida).
+  const acordoPct = Number(cliente.desconto_financeiro_pct||0) / 100;
+  const finPct = Math.max(taxaDiaria/100 * diasDif, 0);
+  const comPct = comissaoTipo === 'fixo' ? 0 : Number(cliente.comissao_valor||0) / 100;
+  const fixosPedido = freteRS + (comissaoTipo === 'fixo' ? comissaoRS : 0);
+  const oPct = comPct + finPct + (totalFatBruto > 0 ? fixosPedido / totalFatBruto : 0);
+  const margemMin = Number(cliente.margem_minima_pct||0) / 100;
+  itensCalc.forEach(it => {
+    it.mcUnit = it.preco * (1 - acordoPct) - it.varUnit - it.preco * oPct;
+    it.mcItem = it.qtd * it.mcUnit;
+    it.mcPct = it.fatLiquidoItem > 0 ? it.mcItem / it.fatLiquidoItem * 100 : null;
+    // resolve o preço considerando que, ao mudar o preço deste item, o rateio do frete/comissão fixa também muda
+    const resolver = (custoBase, fatorMargem) => {
+      let preco = null, o = oPct;
+      for(let k = 0; k < 30; k++){
+        const d = (1 - acordoPct) * fatorMargem - o;
+        if(d <= 0) return null;
+        preco = custoBase / d;
+        if(it.qtd <= 0 || fixosPedido <= 0) break;
+        const totalNovo = totalFatBruto - it.fatBruto + preco * it.qtd;
+        o = comPct + finPct + (totalNovo > 0 ? fixosPedido / totalNovo : 0);
+      }
+      return preco;
+    };
+    it.precoMin = resolver(it.varUnit, 1);
+    it.precoAlvo = resolver(it.custoUsado, 1 - margemMin);
+  });
+
+  // ordenação: tabelas do cliente sempre em ordem alfabética; a tabela de análise segue a opção escolhida
+  const cmpNome = (a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR', {sensitivity:'base'});
+  linhasCliente.sort(cmpNome);
+  const ordem = window._ordemSim || 'nome';
+  const key = {
+    margem_desc: i => i.margemItem, margem_asc: i => i.margemItem,
+    fat_desc: i => i.fatBruto, qtd_desc: i => i.qtd, mc_un: i => i.mcUnit
+  }[ordem];
+  itensCalc.sort((a, b) => {
+    if(!key) return cmpNome(a, b);                       // A–Z
+    if((a.qtd > 0) !== (b.qtd > 0)) return a.qtd > 0 ? -1 : 1;   // sem quantidade vai para o fim
+    const d = ordem === 'margem_asc' ? key(a) - key(b) : key(b) - key(a);
+    return d !== 0 ? d : cmpNome(a, b);
+  });
+
   // 2ª passada: monta a tabela já com a margem líquida por item (rateando frete+comissão+financeiro)
   let html = `<div style="display:flex; align-items:center; gap:8px; margin:0 0 8px; flex-wrap:wrap;">
       <label style="margin:0;">Ordenar por</label>
       <select style="width:auto; min-width:210px;" onchange="definirOrdemSim(this.value)">
-        ${[['nome','Nome (A–Z)'],['margem_desc','Margem % (maior primeiro)'],['margem_asc','Margem % (menor primeiro)'],['fat_desc','Faturamento (maior primeiro)'],['qtd_desc','Quantidade (maior primeiro)']].map(o => `<option value="${o[0]}" ${o[0] === ordem ? 'selected' : ''}>${o[1]}</option>`).join('')}
+        ${[['nome','Nome (A–Z)'],['margem_desc','Margem % (maior primeiro)'],['margem_asc','Margem % (menor primeiro)'],['fat_desc','Faturamento (maior primeiro)'],['qtd_desc','Quantidade (maior primeiro)'],['mc_un','Margem de contribuição por unidade (maior primeiro)']].map(o => `<option value="${o[0]}" ${o[0] === ordem ? 'selected' : ''}>${o[1]}</option>`).join('')}
       </select>
     </div>
-    <div class="tbl"><table><thead><tr><th>Produto</th><th>Custo unit.</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th><th>Preço líq. (−acordo)</th><th>Preço líq. (−acordo −entrega)</th></tr></thead><tbody>`;
+    <div class="tbl"><table><thead><tr><th>Produto</th><th>Custo unit.</th><th>Qtd</th><th>Preço venda (R$)</th><th>Preço mín. (cobre variável)</th><th>Preço-alvo (margem mín.)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th><th>Margem contrib. %</th><th>Preço líq. (−acordo)</th><th>Preço líq. (−acordo −entrega)</th></tr></thead><tbody>`;
 
   itensCalc.forEach(it => {
     const share = totalFatBruto > 0 ? (it.fatBruto / totalFatBruto) : 0;
@@ -974,20 +1039,40 @@ function renderVendaResultado(){
     it.custoUnit = it.custoUsado;
     it.precoLiqAcordo = it.preco * (1 - Number(cliente.desconto_financeiro_pct||0)/100);
     it.precoLiqEntrega = it.qtd > 0 ? it.precoLiqAcordo - rateioOutros / it.qtd : null;
+    it.semaforo = it.qtd > 0 ? (margemLiquidaItem >= (cliente.margem_minima_pct||0) - 0.005 && it.preco > 0 ? 'verde' : (it.mcUnit > -0.0001 ? 'amarelo' : 'vermelho')) : null;
+    const tituloSem = {verde:'Atinge a margem mínima do cliente', amarelo:'Cobre o custo variável, mas não a margem mínima', vermelho:'Não cobre nem o custo variável'}[it.semaforo] || '';
     html += `<tr style="${it.precoZerado ? 'background:var(--alerta-bg);' : ''}">
-      <td>${it.nome}${it.precoZerado ? ' <span style="color:var(--alerta); font-size:.75rem; font-weight:600;">⚠️ sem preço</span>' : ''}</td>
+      <td>${bolinha(it.semaforo, tituloSem)}${it.nome}${it.precoZerado ? ' <span style="color:var(--alerta); font-size:.75rem; font-weight:600;">⚠️ sem preço</span>' : ''}${it.qtd > 0 && !it.temComp ? '<div style="font-size:.68rem; color:var(--muda); font-weight:400;">sem composição: MC usa custo cheio</div>' : ''}</td>
       <td>${fmt(it.custoUnit)}</td>
       <td><input type="number" step="1" style="width:90px" value="${it.qtd}" data-v="${it.v.id}" data-campo="quantidade" onchange="atualizarVenda(this)"></td>
       <td><input type="number" step="0.01" style="width:90px; ${it.precoZerado ? 'border-color:var(--alerta); border-width:2px;' : ''}" value="${it.preco}" data-v="${it.v.id}" data-campo="preco_venda" onchange="atualizarVenda(this)"></td>
+      <td style="color:${it.precoMin !== null && it.preco > 0 && it.preco < it.precoMin ? 'var(--alerta)' : 'var(--muda)'}">${it.precoMin !== null ? fmt(it.precoMin) : '—'}</td>
+      <td style="font-weight:600; color:${it.precoAlvo === null ? 'var(--muda)' : (it.preco >= it.precoAlvo - 0.005 ? 'var(--verde)' : '#f5b301')}">${it.precoAlvo !== null ? fmt(it.precoAlvo) : '—'}</td>
       <td>${fmt(it.fatBruto)}</td>
       <td>${fmt(it.custoTotal)}</td>
       <td style="color:${it.qtd>0 && it.margemItem < (cliente.margem_minima_pct||0) ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${it.qtd>0 ? it.margemItem.toFixed(1)+'%' : '—'}</td>
       <td style="color:${it.qtd>0 && margemLiquidaItem < (cliente.margem_minima_pct||0) ? 'var(--alerta)' : 'var(--verde)'}; font-weight:600">${it.qtd>0 ? margemLiquidaItem.toFixed(1)+'%' : '—'}</td>
+      <td style="color:${it.qtd>0 ? COR_SEMAFORO[it.mcUnit > 0 ? 'verde' : 'vermelho'] : 'var(--muda)'}; font-weight:600">${it.qtd>0 && it.mcPct !== null ? it.mcPct.toFixed(1)+'%' : '—'}</td>
       <td>${fmt(it.precoLiqAcordo)}</td>
       <td>${it.precoLiqEntrega !== null ? fmt(it.precoLiqEntrega) : '—'}</td>
     </tr>`;
   });
   html += '</tbody></table></div>';
+  const cardsHtml = `<div class="cards-prod">${itensCalc.map(it => {
+    const temQ = it.qtd > 0, min = (cliente.margem_minima_pct||0);
+    const corM = v => temQ && v < min ? 'var(--alerta)' : 'var(--verde)';
+    const corMC = temQ ? COR_SEMAFORO[it.mcUnit > 0 ? 'verde' : 'vermelho'] : 'var(--muda)';
+    return `<div class="cp">
+      <div class="cp-nome">${bolinha(it.semaforo, '')}${it.nome}</div>
+      <div class="cp-grade">
+        <div class="cm"><span class="cm-t">Margem %</span><span class="cm-v" style="color:${corM(it.margemItem)}">${temQ ? it.margemItem.toFixed(1)+'%' : '—'}</span></div>
+        <div class="cm"><span class="cm-t">Margem líquida %</span><span class="cm-v" style="color:${corM(it.margemLiquida)}">${temQ && it.margemLiquida !== null ? it.margemLiquida.toFixed(1)+'%' : '—'}</span></div>
+        <div class="cm"><span class="cm-t">Margem contrib. %</span><span class="cm-v" style="color:${corMC}">${temQ && it.mcPct !== null ? it.mcPct.toFixed(1)+'%' : '—'}</span></div>
+        <div class="cm"><span class="cm-t">Preço líq. (−acordo)</span><span class="cm-v">${fmt(it.precoLiqAcordo)}</span></div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+  html = html.replace('<div class="tbl"><table>', cardsHtml + '<div class="tbl"><table>');
 
   const totalLucro = totalFatBruto - totalDesconto - freteRS - comissaoRS - totalCusto - custoFinanceiro;
   const margemGeral = totalFatBruto > 0 ? (totalLucro/totalFatBruto*100) : 0;
@@ -1007,7 +1092,29 @@ function renderVendaResultado(){
     <div class="kpi ${totalLucro<0?'alerta':'verde'}"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>Lucro Total</div><div class="val" style="color:${totalLucro<0?'var(--alerta)':'var(--forte)'}">${fmt(totalLucro)}</div><span class="sub ${totalLucro<0?'neg':'pos'}">${totalLucro<0?'↓ negativo':'↑ positivo'}</span></div>
     <div class="kpi ${abaixoDoMinimo?'alerta':'verde'}"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></span>Margem geral</div><div class="val" style="color:${abaixoDoMinimo?'var(--alerta)':'var(--verde)'}">${margemGeral.toFixed(1).replace('.',',')}%</div><span class="sub ${abaixoDoMinimo?'neg':'pos'}">mínima ${cliente.margem_minima_pct||0}%</span></div>
   </div>`;
-  html = kpiHtml + html;
+  const comQtd = itensCalc.filter(i => i.qtd > 0);
+  const mcTotal = comQtd.reduce((a, i) => a + i.mcItem, 0);
+  const mcTotalPct = fatLiquido > 0 ? mcTotal / fatLiquido * 100 : 0;
+  const stPedido = totalFatBruto <= 0 ? null : (!abaixoDoMinimo ? 'verde' : (mcTotal > 0 ? 'amarelo' : 'vermelho'));
+  const nSem = {verde:0, amarelo:0, vermelho:0}; comQtd.forEach(i => { if(i.semaforo) nSem[i.semaforo]++; });
+  const semComp = comQtd.filter(i => !i.temComp).length;
+  const msgPedido = {
+    verde: `Pedido dentro da margem mínima do cliente (${cliente.margem_minima_pct||0}%).`,
+    amarelo: `Abaixo da margem mínima (${cliente.margem_minima_pct||0}%), mas cobre os custos variáveis e contribui com <strong>${fmt(mcTotal)}</strong> para pagar a estrutura. Aceitável só se houver sobra de produto.`,
+    vermelho: `Não cobre nem os custos variáveis: este pedido aumenta o prejuízo em <strong>${fmt(Math.abs(mcTotal))}</strong>.`
+  };
+  const bannerHtml = !stPedido ? '' : `
+    <div class="card" style="border-color:${COR_SEMAFORO[stPedido]}; padding:12px 16px; margin-bottom:12px;">
+      <div style="display:flex; align-items:baseline; gap:2px;">
+        <span style="flex:0 0 auto;">${bolinha(stPedido)}</span><span style="font-size:.9rem;">${msgPedido[stPedido]}</span>
+      </div>
+      <div style="font-size:.78rem; color:var(--muda); margin-top:6px;">
+        Margem de contribuição do pedido: <strong style="color:var(--texto)">${fmt(mcTotal)}</strong> (${mcTotalPct.toFixed(1).replace('.',',')}% do líquido)
+        · Itens: ${bolinha('verde')}${nSem.verde} ${bolinha('amarelo')}${nSem.amarelo} ${bolinha('vermelho')}${nSem.vermelho}
+        ${semComp ? `<br>${semComp} produto(s) sem composição na Formação de Custo: neles a margem de contribuição usa o custo cheio.` : ''}
+      </div>
+    </div>`;
+  html = kpiHtml + bannerHtml + html;
 
   html += `
     <div class="resultado-box ${abaixoDoMinimo ? 'alerta' : 'ok'}">
@@ -1018,6 +1125,7 @@ function renderVendaResultado(){
       <div class="breakdown-row"><span>(−) Custo Total</span><span>${fmt(totalCusto)}</span></div>
       <div class="breakdown-row"><span>${cfLabel} (${diasDif>0?'+':''}${diasDif} dias × ${taxaMensal}%/mês)</span><span>${fmt(Math.abs(custoFinanceiro))}</span></div>
       <div class="breakdown-row total"><span>Lucro Total</span><span class="valor">${fmt(totalLucro)}</span></div>
+      <div style="margin-top:8px;">Margem de contribuição: <strong>${fmt(mcTotal)}</strong> (${mcTotalPct.toFixed(1)}% do líquido) — o que sobra depois dos custos variáveis para pagar mão de obra e estrutura</div>
       <div style="margin-top:8px;">Margem geral: <strong>${margemGeral.toFixed(1)}%</strong> — mínima cadastrada: ${cliente.margem_minima_pct||0}%</div>
       ${abaixoDoMinimo ? '<div class="aviso">⚠️ Margem abaixo do mínimo cadastrado para este cliente.</div>' : ''}
       <div style="margin-top:6px; font-size:.8rem; color:var(--muda);">
@@ -1037,7 +1145,7 @@ function renderVendaResultado(){
       </div>
       <div style="font-size:.78rem; color:var(--muda); margin-bottom:10px;">Vem do custo cadastrado. Se alterar, o cálculo usa o novo valor só para este cliente. Isso <strong>não muda</strong> a aba Custos e some ao recarregar a página (a venda salva guarda o custo usado).</div>
       ${itensComQtd.length === 0 ? '<div class="empty">Coloque quantidade nos produtos para ver os custos.</div>' : `
-      <div class="tbl"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Custo geral</th><th>Custo nesta simulação (R$)</th><th>Diferença</th></tr></thead><tbody>
+      <div class="tbl"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Custo geral</th><th>Parte fixa</th><th>Custo nesta simulação (R$)</th><th>Diferença</th></tr></thead><tbody>
         ${itensComQtd.map(i => {
           const dif = i.custoUsado - i.custoGeral;
           const alt = Math.abs(dif) > 0.0001;
@@ -1046,6 +1154,7 @@ function renderVendaResultado(){
             <td>${i.nome}</td>
             <td>${i.qtd}</td>
             <td>${fmt(i.custoGeral)}</td>
+            <td style="color:var(--muda)">${i.temComp ? fmt(i.fixoUnit) : '—'}</td>
             <td><input type="number" step="0.01" min="0" style="width:110px; ${alt ? 'border-color:var(--alerta);' : ''}" value="${i.custoUsado}" onchange="definirCustoSim('${clienteId}','${i.prodId}', this.value)"></td>
             <td style="color:${alt ? (dif > 0 ? 'var(--alerta)' : 'var(--verde)') : 'var(--muda)'}; font-weight:${alt ? 700 : 400}">${alt ? (dif > 0 ? '+' : '') + fmt(dif) + (difPct !== null ? ' (' + (dif > 0 ? '+' : '') + difPct.toFixed(1).replace('.', ',') + '%)' : '') : '—'}</td>
           </tr>`;
@@ -1116,7 +1225,10 @@ function renderVendaResultado(){
       taxa_mensal_pct: taxaMensal,
       dias_recebe: diasRecebe,
       dias_paga: diasPaga,
-      tem_frete: !!cliente.tem_frete
+      tem_frete: !!cliente.tem_frete,
+      mc_total: mcTotal,
+      mc_pct: mcTotalPct,
+      semaforo: stPedido
     },
     itens: itensCalc.filter(i => i.qtd > 0).map(i => ({
       nome: i.nome,
@@ -1131,7 +1243,13 @@ function renderVendaResultado(){
       custo_geral: i.custoGeral,
       custo_alterado: Math.abs(i.custoUsado - i.custoGeral) > 0.0001,
       preco_liq_acordo: i.precoLiqAcordo,
-      preco_liq_entrega: i.precoLiqEntrega
+      preco_liq_entrega: i.precoLiqEntrega,
+      custo_variavel: i.varUnit,
+      mc: i.mcItem,
+      mc_pct: i.mcPct,
+      preco_minimo: i.precoMin,
+      preco_alvo: i.precoAlvo,
+      semaforo: i.semaforo
     }))
   };
 
