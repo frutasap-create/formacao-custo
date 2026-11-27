@@ -360,9 +360,9 @@
 
 <nav>
   <button class="tab-btn active" data-tab="clientes">Clientes</button>
-  <button class="tab-btn" data-tab="custos">Custos</button>
   <button class="tab-btn" data-tab="formacao">Formação de Custo</button>
-  <button class="tab-btn" data-tab="venda">Preço de Venda</button>
+  <button class="tab-btn" data-tab="custos">Custos</button>
+  <button class="tab-btn" data-tab="venda">Simulação de Pedido</button>
   <button class="tab-btn" data-tab="salvas">Vendas Salvas</button>
 </nav>
 
@@ -850,6 +850,23 @@ function renderVendaSelect(){
 }
 document.getElementById('vendaCliente').addEventListener('change', renderVendaResultado);
 
+window._custoSim = window._custoSim || {};
+function definirCustoSim(clienteId, prodId, valor){
+  const chave = clienteId + ':' + prodId;
+  const n = parseFloat(String(valor).replace(',', '.'));
+  const p = produtos.find(x => x.id === prodId);
+  if(valor === '' || isNaN(n) || n < 0 || (p && Math.abs(n - Number(p.custo_unitario||0)) < 0.0001)){
+    delete window._custoSim[chave];
+  } else {
+    window._custoSim[chave] = n;
+  }
+  renderVendaResultado();
+}
+function restaurarCustosSim(clienteId){
+  Object.keys(window._custoSim).forEach(k => { if(k.startsWith(clienteId + ':')) delete window._custoSim[k]; });
+  renderVendaResultado();
+}
+
 function renderVendaResultado(){
   const el = document.getElementById('vendaResultado');
   const clienteId = document.getElementById('vendaCliente').value;
@@ -874,7 +891,10 @@ function renderVendaResultado(){
     const preco = Number(v.preco_venda) || 0;
     const fatBruto = qtd * preco;
     const descontoRS = fatBruto * ((cliente.desconto_financeiro_pct||0)/100);
-    const custoTotal = qtd * Number(p.custo_unitario||0);
+    const custoGeral = Number(p.custo_unitario||0);
+    const chaveCusto = clienteId + ':' + p.id;
+    const custoUsado = (window._custoSim && window._custoSim[chaveCusto] !== undefined) ? window._custoSim[chaveCusto] : custoGeral;
+    const custoTotal = qtd * custoUsado;
     const fatLiquidoItem = fatBruto - descontoRS;
     const margemItem = fatLiquidoItem > 0 ? ((fatLiquidoItem - custoTotal) / fatLiquidoItem * 100) : 0;
     const precoZerado = qtd > 0 && preco === 0;
@@ -892,7 +912,7 @@ function renderVendaResultado(){
       linhasCliente.push({nome: p.nome, unidade: p.unidade, qtd, preco, total: fatBruto});
     }
 
-    itensCalc.push({nome: p.nome, v, qtd, preco, fatBruto, descontoRS, custoTotal, fatLiquidoItem, margemItem, precoZerado});
+    itensCalc.push({nome: p.nome, prodId: p.id, custoGeral, custoUsado, v, qtd, preco, fatBruto, descontoRS, custoTotal, fatLiquidoItem, margemItem, precoZerado});
   });
 
   // Frete e comissão: aplicados UMA vez sobre o total da venda
@@ -924,7 +944,7 @@ function renderVendaResultado(){
 
     it.margemLiquida = it.qtd > 0 ? margemLiquidaItem : null;
     const prodItem = produtos.find(x => x.id === it.v.produto_id) || {};
-    it.custoUnit = Number(prodItem.custo_unitario || 0);
+    it.custoUnit = it.custoUsado;
     it.precoLiqAcordo = it.preco * (1 - Number(cliente.desconto_financeiro_pct||0)/100);
     it.precoLiqEntrega = it.qtd > 0 ? it.precoLiqAcordo - rateioOutros / it.qtd : null;
     html += `<tr style="${it.precoZerado ? 'background:var(--alerta-bg);' : ''}">
@@ -976,6 +996,34 @@ function renderVendaResultado(){
       <div style="margin-top:6px; font-size:.8rem; color:var(--muda);">
         Recebe em ${diasRecebe} dias · Paga fornecedor em ${diasPaga} dias (média) · Diferença: ${diasDif>0?'+':''}${diasDif} dias
       </div>
+    </div>
+  `;
+
+  // ===== CUSTO DESTA SIMULAÇÃO (puxa o custo cadastrado; pode alterar só para este cliente) =====
+  const itensComQtd = itensCalc.filter(i => i.qtd > 0);
+  const algumAlterado = itensComQtd.some(i => Math.abs(i.custoUsado - i.custoGeral) > 0.0001);
+  html += `
+    <div class="card" style="margin-top:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+        <h2 style="margin:0;">Custo desta simulação</h2>
+        ${algumAlterado ? `<button class="btn secundario" style="padding:5px 12px; font-size:.78rem" onclick="restaurarCustosSim('${clienteId}')">↩ Restaurar custos gerais</button>` : ''}
+      </div>
+      <div style="font-size:.78rem; color:var(--muda); margin-bottom:10px;">Vem do custo cadastrado. Se alterar, o cálculo usa o novo valor só para este cliente. Isso <strong>não muda</strong> a aba Custos e some ao recarregar a página (a venda salva guarda o custo usado).</div>
+      ${itensComQtd.length === 0 ? '<div class="empty">Coloque quantidade nos produtos para ver os custos.</div>' : `
+      <div class="tbl"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Custo geral</th><th>Custo nesta simulação (R$)</th><th>Diferença</th></tr></thead><tbody>
+        ${itensComQtd.map(i => {
+          const dif = i.custoUsado - i.custoGeral;
+          const alt = Math.abs(dif) > 0.0001;
+          const difPct = i.custoGeral > 0 ? (dif / i.custoGeral * 100) : null;
+          return `<tr>
+            <td>${i.nome}</td>
+            <td>${i.qtd}</td>
+            <td>${fmt(i.custoGeral)}</td>
+            <td><input type="number" step="0.01" min="0" style="width:110px; ${alt ? 'border-color:var(--alerta);' : ''}" value="${i.custoUsado}" onchange="definirCustoSim('${clienteId}','${i.prodId}', this.value)"></td>
+            <td style="color:${alt ? (dif > 0 ? 'var(--alerta)' : 'var(--verde)') : 'var(--muda)'}; font-weight:${alt ? 700 : 400}">${alt ? (dif > 0 ? '+' : '') + fmt(dif) + (difPct !== null ? ' (' + (dif > 0 ? '+' : '') + difPct.toFixed(1).replace('.', ',') + '%)' : '') : '—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody></table></div>`}
     </div>
   `;
 
@@ -1053,6 +1101,8 @@ function renderVendaResultado(){
       margem: i.margemItem,
       margem_liquida: i.margemLiquida,
       custo_unit: i.custoUnit,
+      custo_geral: i.custoGeral,
+      custo_alterado: Math.abs(i.custoUsado - i.custoGeral) > 0.0001,
       preco_liq_acordo: i.precoLiqAcordo,
       preco_liq_entrega: i.precoLiqEntrega
     }))
@@ -1529,7 +1579,7 @@ function renderSalvas(){
   const el = document.getElementById('salvasLista');
   const filtro = document.getElementById('salvasCliente').value;
   const lista = salvas.filter(v => !filtro || v.cliente_nome === filtro);
-  if(lista.length === 0){ el.innerHTML = '<div class="empty">Nenhuma venda salva ainda. Na aba Preço de Venda, use o botão "Salvar venda".</div>'; return; }
+  if(lista.length === 0){ el.innerHTML = '<div class="empty">Nenhuma venda salva ainda. Na aba Simulação de Pedido, use o botão "Salvar venda".</div>'; return; }
 
   let html = '';
 
