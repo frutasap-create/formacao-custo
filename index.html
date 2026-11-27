@@ -851,6 +851,12 @@ function renderVendaSelect(){
 document.getElementById('vendaCliente').addEventListener('change', renderVendaResultado);
 
 window._custoSim = window._custoSim || {};
+try { window._ordemSim = localStorage.getItem('ordemSim') || 'nome'; } catch(e){ window._ordemSim = 'nome'; }
+function definirOrdemSim(v){
+  window._ordemSim = v;
+  try { localStorage.setItem('ordemSim', v); } catch(e){}
+  renderVendaResultado();
+}
 function definirCustoSim(clienteId, prodId, valor){
   const chave = clienteId + ':' + prodId;
   const n = parseFloat(String(valor).replace(',', '.'));
@@ -915,6 +921,21 @@ function renderVendaResultado(){
     itensCalc.push({nome: p.nome, prodId: p.id, custoGeral, custoUsado, v, qtd, preco, fatBruto, descontoRS, custoTotal, fatLiquidoItem, margemItem, precoZerado});
   });
 
+  // ordenação: tabelas do cliente sempre em ordem alfabética; a tabela de análise segue a opção escolhida
+  const cmpNome = (a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR', {sensitivity:'base'});
+  linhasCliente.sort(cmpNome);
+  const ordem = window._ordemSim || 'nome';
+  const key = {
+    margem_desc: i => i.margemItem, margem_asc: i => i.margemItem,
+    fat_desc: i => i.fatBruto, qtd_desc: i => i.qtd
+  }[ordem];
+  itensCalc.sort((a, b) => {
+    if(!key) return cmpNome(a, b);                       // A–Z
+    if((a.qtd > 0) !== (b.qtd > 0)) return a.qtd > 0 ? -1 : 1;   // sem quantidade vai para o fim
+    const d = ordem === 'margem_asc' ? key(a) - key(b) : key(b) - key(a);
+    return d !== 0 ? d : cmpNome(a, b);
+  });
+
   // Frete e comissão: aplicados UMA vez sobre o total da venda
   const freteRS = cliente.tem_frete ? Number(cliente.valor_frete||0) : 0;
   const comissaoTipo = cliente.comissao_tipo || 'percentual';
@@ -934,7 +955,13 @@ function renderVendaResultado(){
   const outrosParaMargem = freteRS + comissaoRS + Math.max(custoFinanceiro, 0); // ganho financeiro NÃO entra na margem líquida do item
 
   // 2ª passada: monta a tabela já com a margem líquida por item (rateando frete+comissão+financeiro)
-  let html = `<div class="tbl"><table><thead><tr><th>Produto</th><th>Custo unit.</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th><th>Preço líq. (−acordo)</th><th>Preço líq. (−acordo −entrega)</th></tr></thead><tbody>`;
+  let html = `<div style="display:flex; align-items:center; gap:8px; margin:0 0 8px; flex-wrap:wrap;">
+      <label style="margin:0;">Ordenar por</label>
+      <select style="width:auto; min-width:210px;" onchange="definirOrdemSim(this.value)">
+        ${[['nome','Nome (A–Z)'],['margem_desc','Margem % (maior primeiro)'],['margem_asc','Margem % (menor primeiro)'],['fat_desc','Faturamento (maior primeiro)'],['qtd_desc','Quantidade (maior primeiro)']].map(o => `<option value="${o[0]}" ${o[0] === ordem ? 'selected' : ''}>${o[1]}</option>`).join('')}
+      </select>
+    </div>
+    <div class="tbl"><table><thead><tr><th>Produto</th><th>Custo unit.</th><th>Qtd</th><th>Preço venda (R$)</th><th>Faturamento</th><th>Custo</th><th>Margem %</th><th>Margem Líquida %</th><th>Preço líq. (−acordo)</th><th>Preço líq. (−acordo −entrega)</th></tr></thead><tbody>`;
 
   itensCalc.forEach(it => {
     const share = totalFatBruto > 0 ? (it.fatBruto / totalFatBruto) : 0;
